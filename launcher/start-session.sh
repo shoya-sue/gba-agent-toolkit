@@ -45,6 +45,16 @@ done
 
 # ── 事前検証 ──────────────────────────────────────────────────
 [ -n "$ROM" ] || { echo "RESULT: ERROR --rom is required"; exit 2; }
+# port は 1-65535 の整数のみ
+case "$PORT" in
+  ''|*[!0-9]*) echo "RESULT: ERROR PORT must be an integer 1-65535: $PORT"; exit 2;;
+esac
+{ [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; } || { echo "RESULT: ERROR PORT out of range 1-65535: $PORT"; exit 2; }
+# bind は localhost 系のみ許可（外部公開事故の防止）
+case "$BIND" in
+  127.0.0.1|localhost|::1) : ;;
+  *) echo "RESULT: ERROR BIND must be localhost/127.0.0.1/::1 (got: $BIND)"; exit 2;;
+esac
 [ -f "$ROM" ] || fail "ROM not found: $ROM" 1
 [ -f "$BRIDGE" ] || fail "bridge.lua not found: $BRIDGE" 1
 [ -d "$MGBA_APP" ] || fail "mGBA.app not found: $MGBA_APP" 1

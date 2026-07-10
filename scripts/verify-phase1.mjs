@@ -15,6 +15,15 @@ import { existsSync, statSync, readFileSync } from 'node:fs';
 
 const MGBA_HOST = process.env.MGBA_HOST || '127.0.0.1';
 const MGBA_PORT = process.env.MGBA_PORT || '8765';
+// localhost 限定・port 範囲を検証（意図しない外部接続の防止）
+if (!/^(127\.0\.0\.1|localhost|::1)$/.test(MGBA_HOST)) {
+  console.error(`MGBA_HOST must be localhost/127.0.0.1/::1 (got: ${MGBA_HOST})`);
+  process.exit(2);
+}
+if (!/^\d{1,5}$/.test(MGBA_PORT) || Number(MGBA_PORT) < 1 || Number(MGBA_PORT) > 65535) {
+  console.error(`MGBA_PORT must be 1-65535 (got: ${MGBA_PORT})`);
+  process.exit(2);
+}
 
 // --- mcp-mgba を stdio で起動する MCP クライアント -----------------
 function makeClient() {
