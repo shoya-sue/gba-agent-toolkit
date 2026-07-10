@@ -51,12 +51,18 @@ claude mcp add mgba --scope user mcp-mgba
 環境変数（既定でOK）: `MGBA_HOST=127.0.0.1` / `MGBA_PORT=8765`
 
 ### 5. 接続テスト（DoD）
-Claude Code から順に呼ぶ:
+**簡易**: リポジトリ直下で `./scripts/test-connection.sh` を実行。
+- `✓ PASS` → bridge 稼働・接続成立（Phase 0 DoD 達成）
+- `✗ FAIL: ECONNREFUSED` → mGBA 側の bridge.lua 未ロード（手順 3 を実施して再実行）
+
+**手動**（Claude Code から順に）:
 - `mgba_ping` → `pong` が返れば接続成立
 - `mgba_get_info` → ROMタイトル/コード/フレーム数
 - `mgba_screenshot` → 画面キャプチャ（PNG）
 
 3つが自ROMで通れば **Phase 0 完了**。
+
+> mcp-mgba の MCP サーバ稼働（`tools/list` で 19 ツール応答）は自動テスト済み。残るは mGBA GUI での `bridge.lua` ロード（CLI 自動化不可）＋自 ROM のみ。
 
 ## 提供ツール（mcp-mgba）
 `mgba_ping` / `mgba_get_info` / `mgba_read8|16|32` / `mgba_write8|16|32` / `mgba_read_range` / `mgba_write_range` / `mgba_press_buttons` / `mgba_advance_frames` / `mgba_pause` / `mgba_unpause` / `mgba_reset` / `mgba_screenshot` / `mgba_save_state` / `mgba_load_state`
