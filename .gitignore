@@ -36,6 +36,12 @@ yarn-error.log*
 target/
 launcher/src-tauri/target/
 launcher/src-tauri/gen/
+# tauri icon が生成するモバイル/Store 用（macOS launcher では不使用）
+launcher/src-tauri/icons/android/
+launcher/src-tauri/icons/ios/
+launcher/src-tauri/icons/Square*.png
+launcher/src-tauri/icons/StoreLogo.png
+launcher/src-tauri/icons/64x64.png
 
 # --- Python (PyBoy 経路 / mcp) ---
 __pycache__/

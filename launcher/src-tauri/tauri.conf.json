@@ -28,7 +28,15 @@
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "resources": {
+      "../start-session.sh": "scripts/start-session.sh",
+      "../stop-session.sh": "scripts/stop-session.sh",
+      "../../mcp-server/mgba-bridge/bridge.lua": "mgba-bridge/bridge.lua",
+      "../../mcp-server/mgba-bridge/json.lua": "mgba-bridge/json.lua"
+    }
   }
 }

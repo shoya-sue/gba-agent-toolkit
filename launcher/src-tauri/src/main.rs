@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::Manager;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Config {
@@ -26,10 +27,19 @@ impl Default for Config {
     }
 }
 
-/// launcher/ ディレクトリ（オーケストレーションスクリプトの所在）。
-/// CARGO_MANIFEST_DIR = launcher/src-tauri なので、その親が launcher/。
-fn scripts_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
+/// リソース（スクリプト・bridge.lua）を解決する。
+/// 配布バンドルでは Tauri resources（`<App>.app/Contents/Resources/`）から、
+/// 開発実行では `CARGO_MANIFEST_DIR/..`(=launcher/) 起点で解決する。
+///   bundled_rel: バンドル Resources 内の相対パス（例 "scripts/start-session.sh"）
+///   dev_rel    : launcher/ からの相対パス（例 "start-session.sh"）
+fn resolve_resource(app: &tauri::AppHandle, bundled_rel: &str, dev_rel: &str) -> PathBuf {
+    if let Ok(res) = app.path().resource_dir() {
+        let p = res.join(bundled_rel);
+        if p.exists() {
+            return p;
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join(dev_rel)
 }
 
 fn config_dir() -> PathBuf {
@@ -43,6 +53,27 @@ fn config_dir() -> PathBuf {
 
 fn config_path() -> PathBuf {
     config_dir().join("launcher.json")
+}
+
+/// 同梱 bridge.lua / json.lua を **スペースを含まない**作業ディレクトリへ複製し、
+/// 複製した bridge.lua のパスを返す。
+/// 理由: mGBA の Lua が `require("json")` を解決する際、バンドルパス
+/// （`.../GBA Agent Launcher.app/...`）に含まれる空白でロードが破綻するため、
+/// `~/.config/gba-agent-toolkit/mgba-bridge/`（空白なし）へ退避してから読み込ませる。
+fn stage_bridge(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let src_bridge = resolve_resource(app, "mgba-bridge/bridge.lua", "../mcp-server/mgba-bridge/bridge.lua");
+    if !src_bridge.exists() {
+        return Err(format!("bridge.lua が見つかりません: {}", src_bridge.display()));
+    }
+    let src_json = resolve_resource(app, "mgba-bridge/json.lua", "../mcp-server/mgba-bridge/json.lua");
+    let dest_dir = config_dir().join("mgba-bridge");
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    std::fs::copy(&src_bridge, dest_dir.join("bridge.lua")).map_err(|e| e.to_string())?;
+    if src_json.exists() {
+        // bridge.lua は同フォルダの json.lua を require するため必ず同居させる
+        std::fs::copy(&src_json, dest_dir.join("json.lua")).map_err(|e| e.to_string())?;
+    }
+    Ok(dest_dir.join("bridge.lua"))
 }
 
 /// macOS ネイティブのファイル選択ダイアログ（プラグイン不要・osascript）。
@@ -69,8 +100,15 @@ end try"#;
 
 /// Start 一発: start-session.sh を実行し RESULT 行で成否を判定。
 #[tauri::command]
-fn start_session(rom: String, port: String, bind: String) -> Result<String, String> {
-    let script = scripts_dir().join("start-session.sh");
+fn start_session(
+    app: tauri::AppHandle,
+    rom: String,
+    port: String,
+    bind: String,
+) -> Result<String, String> {
+    let script = resolve_resource(&app, "scripts/start-session.sh", "start-session.sh");
+    // bridge.lua を空白なしパスへ退避（バンドルパスの空白による Lua ロード破綻を回避）
+    let bridge = stage_bridge(&app)?;
     let out = Command::new("bash")
         .arg(&script)
         .arg("--rom")
@@ -79,6 +117,8 @@ fn start_session(rom: String, port: String, bind: String) -> Result<String, Stri
         .arg(&port)
         .arg("--bind")
         .arg(&bind)
+        .arg("--bridge")
+        .arg(&bridge)
         .output()
         .map_err(|e| format!("start-session.sh 実行失敗: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -94,8 +134,8 @@ fn start_session(rom: String, port: String, bind: String) -> Result<String, Stri
 
 /// セッション停止: mGBA を終了（bridge も停止）。
 #[tauri::command]
-fn stop_session() -> Result<String, String> {
-    let script = scripts_dir().join("stop-session.sh");
+fn stop_session(app: tauri::AppHandle) -> Result<String, String> {
+    let script = resolve_resource(&app, "scripts/stop-session.sh", "stop-session.sh");
     let out = Command::new("bash")
         .arg(&script)
         .output()
