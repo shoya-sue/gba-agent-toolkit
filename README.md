@@ -45,12 +45,14 @@ Tauri ランチャー: 「ROM 選択 → Start」で上記を一括起動（side
 | Phase | 内容 | Milestone | Issue | 状態 |
 |---|---|---|---|---|
 | 0 | 環境検証・接続確認 | M1 | [#2](../../issues/2) | ✅ 完了（2026-07-10） |
-| 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) | ⏭ 次 |
-| 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) | — |
+| 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) | ✅ 完了（2026-07-10） |
+| 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) | 🚧 進行中 |
 | 3 | MCP / Agent 連携 | M4 | [#5](../../issues/5) | — |
 | 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) | — |
 
 > **Phase 0 完了**: mGBA v0.10.5 + `mcp-mgba` v0.3.3（vendored `bridge.lua`）で実機疎通を確認。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値 / `mgba_screenshot`→240×160 PNG。詳細は [docs/env-verification.md](docs/env-verification.md)。
+>
+> **Phase 1 完了**: コア API 3 系統（画面取得・入力送信・メモリ読取）＋セーブステートを実機検証（`scripts/verify-phase1.mjs` → **10/10 PASS**）。API 仕様は [docs/api-reference.md](docs/api-reference.md)。bind は `127.0.0.1` 固定。
 
 各 Issue には推奨 Claude Code モデル（`model:opus` / `model:sonnet`）と effort（`effort:high` / `effort:medium`）ラベルが付与されています。
 
