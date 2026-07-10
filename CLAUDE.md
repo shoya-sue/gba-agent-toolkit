@@ -27,8 +27,9 @@ docs/           # ロードマップ・手順書・検証記録
 ## 現状 (2026-07-10)
 - **Phase 0 完了 ✅**: mGBA v0.10.5（Lua有効）+ mcp-mgba v0.3.3（bridge.lua vendor済）で**実機疎通を確認**。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値（`Title: GBA Tests / Frame: 26197`）/ `mgba_screenshot`→240×160 RGB PNG。`./scripts/test-connection.sh`→`✓ PASS`（検証記録 `docs/env-verification.md`）
 - **Phase 1 完了 ✅**: コア API 3 系統（画面取得・入力送信・メモリ読取）＋セーブステートを実機検証。`scripts/verify-phase1.mjs`→**10/10 PASS**（メモリ読取で ROM タイトル "GBA Tests" を実読取・save/load でフレーム巻戻り確認）。API 仕様書 `docs/api-reference.md`。bind は `127.0.0.1` 固定
-- **次: Phase 2 (#4)** — Tauri v2 ランチャー（ROM選択→Start で mGBA+bridge.lua+MCP を sidecar 統合起動）
-- bridge.lua ロードは GUI 必須だが、`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動化可（画面ロック中も可）。Phase 2 の sidecar 自動ロードはこの方式を採用。手順は `docs/phase0-setup.md`
+- **Phase 2 完了 ✅**: Tauri v2 ランチャー `launcher/`（`start-session.sh` オーケストレーション + Rust コマンド + `ui/index.html`）。「ROM選択→Start」で mGBA+ROM+bridge.lua 自動ロード+MCP疎通を一括実行。コールドスタート実機検証 `RESULT: OK`、`cargo build` 成功（tauri 2.11.5）。仕様 `docs/phase2-launcher.md`
+- **次: Phase 3 (#5)** — MCP/Agent 連携（Agent サンプルハーネス）
+- bridge.lua ロードは GUI 必須だが、`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動化可（画面ロック中も可）。Phase 2 の自動ロードはこの方式を採用。手順は `docs/phase0-setup.md`
 
 ## ROM 方針
 自己所有カートリッジから吸い出した ROM のみ使用・**配布しない**（`.gitignore` で ROM/セーブ除外）。

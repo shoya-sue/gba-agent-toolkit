@@ -1,0 +1,14 @@
+{
+  "name": "gba-agent-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GBA Agent Toolkit ランチャー（Tauri v2）。ROM 選択 → Start で mGBA + bridge.lua + MCP を一括起動。",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

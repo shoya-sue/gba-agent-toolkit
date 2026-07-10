@@ -1,0 +1,18 @@
+[package]
+name = "gba-agent-launcher"
+version = "0.1.0"
+edition = "2021"
+description = "GBA Agent Toolkit launcher (ROM 選択 → Start で mGBA + bridge.lua + MCP を一括起動)"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "gba-agent-launcher"
+path = "src/main.rs"
