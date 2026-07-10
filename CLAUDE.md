@@ -30,7 +30,8 @@ docs/           # ロードマップ・手順書・検証記録
 - **Phase 2 完了 ✅**: Tauri v2 ランチャー `launcher/`（`start-session.sh` オーケストレーション + Rust コマンド + `ui/index.html`）。「ROM選択→Start」で mGBA+ROM+bridge.lua 自動ロード+MCP疎通を一括実行。コールドスタート実機検証 `RESULT: OK`、`cargo build` 成功（tauri 2.11.5）。仕様 `docs/phase2-launcher.md`
 - **Phase 3 完了 ✅**: MCP/Agent 連携。`agent/`（`lib/mcp-client.mjs` + `policies/demo-policy.mjs` + `play-loop.mjs` + `trial-and-error.mjs`）。知覚→判断→行動ループと セーブステート試行錯誤を実機検証（play-loop 6ステップ / trial-and-error で load 巻戻り成功）。判断関数の差し替えでローカル LLM 自律プレイに拡張可。手順 `docs/agent-integration.md`
 - **セキュリティ**: レビュー実施→ CSP 設定・入力検証(port/bind)・JS 外部化を修正。vendored bridge.lua は非改変（信頼境界=localhost単一ユーザー、任意メモリ読取は中核機能）。方針は `docs/SECURITY.md`
-- **次: Phase 4 (#6)** — GB/GBC(PyBoy) 対応・公開ドキュメント整備
+- **Phase 4 完了 ✅**: GB/GBC 対応（PyBoy v2.7.0/LGPL-3.0-only）。`mcp-server/pyboy/`（`pyboy_bridge.py` + `mcp_server.py`(Python mcp SDK, `pyboy_*` 10ツール) + `test_pyboy_api.py`）。GB(DMG)/GBC(CGB) 両モードで **12/12 PASS**（画面/入力/メモリ/セーブ、libbet.gb で検証）。全体 INDEX は `docs/INDEX.md`
+- **ロードマップ全 Phase 完了 🎉**（#2〜#6 close）。次の展開: ローカル LLM ポリシー実接続 / `tauri build` バンドル / 実 ROM での通し確認
 - bridge.lua ロードは GUI 必須だが、`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動化可（画面ロック中も可）。Phase 2 の自動ロードはこの方式を採用。手順は `docs/phase0-setup.md`
 
 ## ROM 方針

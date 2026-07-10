@@ -1,0 +1,5 @@
+# GB/GBC 経路（PyBoy + Python MCP）依存
+# 導入: python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
+pyboy==2.7.0          # GB/GBC エミュレータ (LGPL-3.0-only)
+mcp>=1.0              # MCP Python SDK (MIT)
+pillow>=10            # スクリーンショット PNG 保存 (HPND/MIT-CMU)

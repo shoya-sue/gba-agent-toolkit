@@ -48,7 +48,7 @@ Tauri ランチャー: 「ROM 選択 → Start」で上記を一括起動（side
 | 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) | ✅ 完了（2026-07-10） |
 | 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) | ✅ 完了（2026-07-10） |
 | 3 | MCP / Agent 連携 | M4 | [#5](../../issues/5) | ✅ 完了（2026-07-10） |
-| 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) | ⏭ 次 |
+| 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) | ✅ 完了（2026-07-10） |
 
 > **Phase 0 完了**: mGBA v0.10.5 + `mcp-mgba` v0.3.3（vendored `bridge.lua`）で実機疎通を確認。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値 / `mgba_screenshot`→240×160 PNG。詳細は [docs/env-verification.md](docs/env-verification.md)。
 >
@@ -57,6 +57,8 @@ Tauri ランチャー: 「ROM 選択 → Start」で上記を一括起動（side
 > **Phase 2 完了**: Tauri v2 ランチャー（`launcher/`）。「ROM 選択 → Start」で mGBA + bridge.lua + MCP を一括起動。オーケストレーション `start-session.sh` をコールドスタート実機検証（`RESULT: OK`）、Tauri アプリは `cargo build` 成功。詳細は [docs/phase2-launcher.md](docs/phase2-launcher.md)。
 >
 > **Phase 3 完了**: MCP/Agent 連携。`agent/` に「知覚→判断→行動」ループ PoC（`play-loop.mjs`）とセーブステート試行錯誤サンプル（`trial-and-error.mjs`）を実装・実機検証。判断関数を差し替えるだけでローカル LLM 自律プレイに拡張可能。接続手順は [docs/agent-integration.md](docs/agent-integration.md)。セキュリティ方針は [docs/SECURITY.md](docs/SECURITY.md)。
+>
+> **Phase 4 完了**: GB/GBC 対応（PyBoy）。`mcp-server/pyboy/` に PyBoy ブリッジ＋ Python MCP サーバを実装。`test_pyboy_api.py` が GB/GBC 両モードで **12/12 PASS**（画面/入力/メモリ/セーブ）。全体 INDEX・採用リポジトリ・ライセンスは [docs/INDEX.md](docs/INDEX.md)。**ロードマップ全 Phase 完了 🎉**
 
 各 Issue には推奨 Claude Code モデル（`model:opus` / `model:sonnet`）と effort（`effort:high` / `effort:medium`）ラベルが付与されています。
 
@@ -80,8 +82,21 @@ gba-agent-toolkit/
 
 詳細は [docs/env-verification.md](docs/env-verification.md) を参照。
 
-## ライセンス
+## ライセンス / 帰属
 
-[MIT](LICENSE) © 2026 shoya-sue
+本リポジトリ: [MIT](LICENSE) © 2026 shoya-sue
 
-流用元: mGBA (MPL-2.0) / dmang-dev/mcp-mgba (MIT) / PyBoy (要確認) / Tauri (Apache-2.0)
+流用元・依存（詳細は [docs/INDEX.md](docs/INDEX.md)）:
+
+| コンポーネント | ライセンス | 用途 |
+|---|---|---|
+| [mGBA](https://github.com/mgba-emu/mgba) | MPL-2.0 | GBA エミュレータ |
+| [`dmang-dev/mcp-mgba`](https://www.npmjs.com/package/mcp-mgba) | MIT | GBA MCP 土台（`bridge.lua` を `mcp-server/mgba-bridge/` に vendor、`LICENSE.mcp-mgba` 同梱） |
+| [PyBoy](https://github.com/Baekalfen/PyBoy) | **LGPL-3.0-only** | GB/GBC エミュレータ（`pip` 依存・非改変利用） |
+| [`mcp` (Python SDK)](https://github.com/modelcontextprotocol/python-sdk) | MIT | GB/GBC MCP |
+| [Tauri](https://tauri.app/) | MIT / Apache-2.0 | ランチャー |
+| Pillow | HPND | スクショ PNG |
+
+検証用 ROM（**非コミット**）: [jsmolka/gba-tests](https://github.com/jsmolka/gba-tests)（MIT）/ [libbet.gb](https://github.com/pinobatch/libbet)（zlib, © Damian Yerrick）。
+
+> **ROM 取り扱い**: 自己所有カートリッジから吸い出した ROM のみ使用・**配布しない**。`.gitignore` で ROM/セーブ/BIOS を除外。
