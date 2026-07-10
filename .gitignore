@@ -1,0 +1,56 @@
+# =============================================================
+#  ROM / セーブデータ ― 絶対にコミットしない
+#  （自己所有カートリッジから吸い出したもののみ使用・配布禁止）
+# =============================================================
+*.gba
+*.gb
+*.gbc
+*.agb
+*.bin
+# セーブ / セーブステート
+*.sav
+*.srm
+*.rtc
+*.state
+*.savestate
+*.ss[0-9]
+roms/
+saves/
+states/
+bios/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Node (mcp-server / launcher frontend) ---
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-error.log*
+.npm
+
+# --- Rust / Tauri (launcher) ---
+target/
+launcher/src-tauri/target/
+launcher/src-tauri/gen/
+
+# --- Python (PyBoy 経路 / mcp) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- 環境変数 / シークレット ---
+.env
+.env.local
+.env.*.local
+
+# --- エディタ ---
+.idea/
+.vscode/
+*.swp

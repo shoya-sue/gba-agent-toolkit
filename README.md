@@ -1,0 +1,79 @@
+# 🎮 gba-agent-toolkit
+
+**ゲームボーイアドバンス（GBA）/ ゲームボーイ（GB/GBC）のゲームを、AI Agent が自律操作するためのツールキット。**
+
+人間は GUI で「ROM 選択 → Start」するだけ。以降の **画面認識・状況判断・入力送信はすべて API/MCP 経由で AI Agent（将来的にローカル LLM）が行う** ことを前提に設計しています。
+
+> ⚠️ **ROM の取り扱いについて**
+> 本ツールは **自己所有カートリッジから自分で吸い出した ROM のみ** を対象とします。**ROM は同梱・配布しません**。ROM ファイル・セーブデータは `.gitignore` で除外済みです。
+
+---
+
+## 設計思想
+
+- 利用主体は人間ではなく **AI Agent**。
+- GUI は人間による **初期セットアップのみ** を担う。
+- 各機能は「人間が遊ぶための機能」ではなく「**Agent が画面を見て・状況を読み取り・入力を送るためのインターフェース**」として設計する。
+
+## アーキテクチャ（想定）
+
+```
+AI Agent (Claude Code / 将来ローカル LLM)
+   │  MCP (JSON-RPC over stdio)
+   ▼
+MCP Server ─┬─ GBA:    dmang-dev/mcp-mgba (TypeScript, MIT)
+   ▲        │            └ bridge.lua (TCP:8765) ── mGBA ── ROM
+   │        └─ GB/GBC: PyBoy + Python mcp (別トラック)
+   │
+Tauri ランチャー: 「ROM 選択 → Start」で上記を一括起動（sidecar）
+```
+
+## 技術スタック
+
+| 領域 | 採用 | 備考 |
+|---|---|---|
+| GBA エミュ | **mGBA v0.10+**（MPL-2.0, Lua 有効） | メモリ/入力/スクショ/セーブステート |
+| GBA MCP 土台 | **`dmang-dev/mcp-mgba`**（TypeScript, MIT, npm） | bridge.lua(TCP:8765) + Node MCP サーバ |
+| GB/GBC エミュ | **PyBoy v2.7.0**（PyPI, GB/GBC 専用・GBA 非対応） | Phase 4 で別トラック統合 |
+| ランチャー | **Tauri v2**（Apache-2.0, sidecar） | ROM 選択→Start の 1 ボタン起動 |
+| Agent 連携 | **MCP**（TS `@modelcontextprotocol/sdk` / Python `mcp`） | ローカル LLM/Claude がツールを叩く標準 |
+
+## ロードマップ
+
+進捗は GitHub Issues で管理しています → **[Epic #1: ロードマップ](../../issues/1)**
+
+| Phase | 内容 | Milestone | Issue |
+|---|---|---|---|
+| 0 | 環境検証・接続確認 | M1 | [#2](../../issues/2) |
+| 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) |
+| 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) |
+| 3 | MCP / Agent 連携 | M4 | [#5](../../issues/5) |
+| 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) |
+
+各 Issue には推奨 Claude Code モデル（`model:opus` / `model:sonnet`）と effort（`effort:high` / `effort:medium`）ラベルが付与されています。
+
+## ディレクトリ構成
+
+```
+gba-agent-toolkit/
+├── launcher/      # Tauri ランチャー GUI（Phase 2）
+├── mcp-server/    # MCP サーバ（GBA=mcp-mgba 連携 / GB/GBC=PyBoy, Phase 1・3・4）
+├── agent/         # AI Agent サンプルハーネス（Phase 3）
+├── scripts/       # 環境検証・補助スクリプト
+└── docs/          # ドキュメント・ロードマップ
+```
+
+## セットアップ（Phase 0）
+
+```bash
+# mGBA 環境の検証（存在・バージョン・Lua 有効性の手掛かり）
+./scripts/check-mgba.sh
+```
+
+詳細は [docs/env-verification.md](docs/env-verification.md) を参照。
+
+## ライセンス
+
+[MIT](LICENSE) © 2026 shoya-sue
+
+流用元: mGBA (MPL-2.0) / dmang-dev/mcp-mgba (MIT) / PyBoy (要確認) / Tauri (Apache-2.0)

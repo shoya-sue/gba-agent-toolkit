@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>GBA/GBエミュレータ API化プロジェクト TODO</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8eb;
+    --muted: #9aa1ac;
+    --accent: #6ee7b7;
+    --accent2: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+    color: var(--text);
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+  }
+  .conclusion {
+    background: linear-gradient(135deg, rgba(110,231,183,0.08), rgba(125,211,252,0.06));
+    border: 1px solid rgba(110,231,183,0.25);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 36px;
+  }
+  .conclusion .label {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .conclusion p { margin: 0; }
+  .conclusion strong { color: var(--accent); }
+  h2 {
+    font-size: 1rem;
+    color: var(--accent2);
+    margin: 0 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .todo-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .num {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(125,211,252,0.12);
+    color: var(--accent2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .todo-title {
+    font-weight: 600;
+    margin: 0 0 6px;
+    font-size: 0.98rem;
+  }
+  .reason {
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin: 0;
+  }
+  .reason .tag {
+    color: var(--accent);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  footer {
+    margin-top: 40px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>GBA/GBエミュレータ API化プロジェクト</h1>
+  <div class="subtitle">自前吸い出しROM対応・ローカルLLMエージェント連携ツール — TODOまとめ</div>
+
+  <div class="conclusion">
+    <div class="label">結論</div>
+    <p>
+      技術的に実現可能。GBAは <strong>mcp-mgba / mgba-mcp</strong>、GB/GBCは <strong>PyBoy</strong> を土台にすれば新規開発はほぼ不要。
+      残る作業は「環境構築 → 動作確認 → 自分用ランチャーGUI実装 → API拡張」というTODOの消化のみで、詳細設計はClaude Opusとの推論セッションに引き継ぐ。
+    </p>
+    <p style="margin-top: 12px;">
+      <strong>本ツールの利用主体は人間ではなくAI Agent（将来的にローカルLLM）である</strong>という前提が全体設計の核。
+      GUIの「ROM選択→Start」は人間による初期セットアップのみを担い、実際のプレイ操作・画面認識・状況判断はすべてAPI経由でAI Agentが行う。
+      そのためTODOの各項目は「人間が遊ぶための機能」ではなく「AI Agentが自律的に画面を見て・状況を読み取り・入力を送るためのインターフェース」として設計されている。
+    </p>
+  </div>
+
+  <h2>TODO一覧</h2>
+  <div class="todo-list">
+
+    <div class="todo-item">
+      <div class="num">1</div>
+      <div>
+        <p class="todo-title">mGBAをHomebrewで導入し、GUIで自分の吸い出し済みROMが起動するか確認</p>
+        <p class="reason"><span class="tag">理由：</span>他の全工程の前提条件。ここが動かないと後続が無意味。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">2</div>
+      <div>
+        <p class="todo-title">struktured-labs/mgba-mcp と dmang-dev/mcp-mgba の両方をローカルでforkして動かし比較</p>
+        <p class="reason"><span class="tag">理由：</span>前者はPython/GB・GBC・GBA全対応でメモリ/エンティティダンプが充実、後者はTypeScript/BunスタックでLLM連携時の統合が楽。実際に触って決めた方が早い。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">3</div>
+      <div>
+        <p class="todo-title">bridge.lua（またはmgba-mcp側のLuaスクリプト）が自ROMで正しく動くか検証</p>
+        <p class="reason"><span class="tag">理由：</span>メモリアドレス依存の実装があるため、ゲームタイトルが変わると動かない可能性がある。自分が使うROM固有の検証が必須。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">4</div>
+      <div>
+        <p class="todo-title">「ROM選択→Start」だけのミニマムランチャーGUIをTauriで試作</p>
+        <p class="reason"><span class="tag">理由：</span>要望の核心部分。mGBA本体の起動＋Luaスクリプト自動ロード＋APIサーバー起動を1ボタンにまとめる部分は既存OSSにないため、ここだけは自作が必要。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">5</div>
+      <div>
+        <p class="todo-title">画面取得・入力送信・メモリ読み取りの3系統APIが安定して呼べることをスクリプトで確認</p>
+        <p class="reason"><span class="tag">理由：</span>後段でLLMエージェントに渡す最小APIセット。ここが安定しないとエージェント側の実装検証すらできない。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">6</div>
+      <div>
+        <p class="todo-title">セーブステートのロード/セーブAPIの動作確認</p>
+        <p class="reason"><span class="tag">理由：</span>将来ローカルLLMエージェントに試行錯誤させる際、失敗時のやり直し・分岐探索に必須の機能。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">7</div>
+      <div>
+        <p class="todo-title">GB/GBC用にPyBoy単体でのAPI起動テスト（mGBA経路とは別スタック）</p>
+        <p class="reason"><span class="tag">理由：</span>GBAはmGBA系、GB/GBCはPyBoyと担当が分かれるため、両対応するなら両方の起動経路を早めに把握しておく必要がある。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">8</div>
+      <div>
+        <p class="todo-title">ここまでの検証結果をObsidianにINDEX化（採用リポジトリ・詰まった点・APIエンドポイント一覧）</p>
+        <p class="reason"><span class="tag">理由：</span>Opusとの推論セッションに渡す前提情報を先に固定しておくと、後の相談が精度高く進む。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">9</div>
+      <div>
+        <p class="todo-title">ROM取り扱いに関する注意事項をREADME等に明記（自己所有カートリッジ由来のみ使用、配布しない）</p>
+        <p class="reason"><span class="tag">理由：</span>エミュレータ自体は合法だがROM配布は別問題。将来ツールを共有・公開する可能性がある以上、前提を文書化しておく必要がある。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">10</div>
+      <div>
+        <p class="todo-title">流用元リポジトリ（特にstruktured-labs/mgba-mcp）のライセンスを確認</p>
+        <p class="reason"><span class="tag">理由：</span>検索時点でライセンス表記が見当たらないリポジトリがある。forkして自分の資産として扱う前に確認・必要なら明記や代替措置が必要。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">11</div>
+      <div>
+        <p class="todo-title">HomebrewのmGBAがLuaスクリプティング有効ビルドか確認、無効ならソースから再ビルド</p>
+        <p class="reason"><span class="tag">理由：</span>Luaスクリプティングはバージョン0.10以降の機能。標準ビルドで無効な場合、bridge.lua系の連携がそもそも動かないため、早い段階で確認しておく必要がある。</p>
+      </div>
+    </div>
+
+    <div class="todo-item">
+      <div class="num">12</div>
+      <div>
+        <p class="todo-title">APIサーバー（HTTP/TCP）をlocalhost限定にするか、公開範囲を明示的に設定</p>
+        <p class="reason"><span class="tag">理由：</span>AI Agent専用ツールとはいえ、設定次第ではLAN上に意図せず公開される。最初にバインドアドレスを固定しておくことで事故を防げる。</p>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>自前所有カートリッジから吸い出したROMのみを使用する前提</footer>
+</div>
+</body>
+</html>
