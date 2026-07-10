@@ -40,21 +40,27 @@
 | ライセンス | MIT | README記載のみ（LICENSEファイルなし） |
 | **採用** | **✓ GBA土台** | GB/GBC は Phase 4 で PyBoy 採用 |
 
-## 実機で残る手順 ⏳（GUI + 自ROM が必要）
-bridge.lua のロードは **GUI 操作のみ**（CLI 起動オプション無し）のため、以下は実機で実施:
-1. `mGBA.app` を起動し、**自ROMを読み込む**（ROM無しは `emu` 未定義でクラッシュ）
-2. `Tools > Scripting…` → `File > Load script` で `mcp-server/mgba-bridge/bridge.lua` をロード
-3. Console に `bridge listening on 127.0.0.1:8765` を確認
-4. 別ターミナルで `mcp-mgba` 起動 → `claude mcp add mgba --scope user mcp-mgba`
-5. Claude Code から `mgba_ping`(→pong) / `mgba_get_info` / `mgba_screenshot`
+## 実機接続テスト ✅（2026-07-10 実施・PASS）
+mGBA に ROM + `bridge.lua` をロードし、`mcp-mgba` 経由で 3 ツールを実測。**すべて実データで通過**:
 
-手順詳細: [docs/phase0-setup.md](phase0-setup.md)
+| ツール | 実測レスポンス |
+|---|---|
+| `mgba_ping` | `pong` |
+| `mgba_get_info` | `Title: GBA Tests / Code: AGB-1337 / Platform: 0 / Frame: 26197`（ライブ実機値） |
+| `mgba_screenshot` | `/tmp/lua_xxxx.png` に保存 → **240×160 8-bit RGB PNG**（GBA 実解像度、ROM 描画内容を正しくキャプチャ） |
 
-## 完了条件 (DoD) 進捗
+- `mcp-mgba` stderr: `connected to mGBA bridge at 127.0.0.1:8765` / `MCP server ready (stdio)`
+- `nc -z 127.0.0.1 8765` → OPEN（bridge がポートを bind 済み）
+- `./scripts/test-connection.sh` → `✓ PASS: mgba_ping 応答あり（bridge.lua 稼働中・接続成立）`
+
+> **自動化知見（重要）**: bridge.lua のロードは当初「GUI 必須・自動化不能」と結論づけたが、**画面ロック中でも自動化できた**。方法: `~/.config/mgba/qt.ini` の `[recentScripts]` セクションに bridge.lua の絶対パスを事前登録 → mGBA 起動 → `Tools > Scripting…` を AX(AppleScript System Events) で開く → `File > Load recent script` サブメニューの項目を **AX クリック**（NSOpenPanel 系のファイルダイアログはロック中に効かないが、メニュー項目クリックは効く）。→ [docs/phase0-setup.md](phase0-setup.md)
+
+## 完了条件 (DoD) 進捗 — **全項目達成 ✅**
 - [x] mGBA の Lua 有効性が確定（**有効**）
 - [x] MCP 土台の選定・ライセンス確認・接続方式の確立
 - [x] mcp-mgba 導入・bridge.lua 配置（導入版と一致）・セットアップ手順書
 - [x] **mcp-mgba MCP サーバの稼働確認**（`tools/list` で 19 ツール応答）＋接続テストスクリプト `scripts/test-connection.sh`
-- [ ] 自ROMで `ping`/`get_info`/`screenshot` が通る ← **実機GUI操作待ち**（mGBAで自ROMロード→`bridge.lua`をScriptingでLoad→`./scripts/test-connection.sh`）
+- [x] **自ROMで `ping`/`get_info`/`screenshot` が通る**（上表の実測で PASS。`test-connection.sh` → `✓ PASS`）
 
-> **自動化限界の明記**: `bridge.lua` のロードは mGBA GUI の `Tools > Scripting` のみ（CLI/config 起動オプション無しを実機確認済み: `--bios`/`--savestate`/`--config` 等のみ）。かつ実 ROM が必要。この 1 ステップのみユーザー実機操作が必須で、自動化不能。完了後 `test-connection.sh` が PASS を返せば Phase 0 DoD 完全達成。
+> **Phase 0 完了（2026-07-10）**: 環境検証・MCP サーバ稼働・実機 bridge 疎通の全 DoD を実データで確認。次は Phase 1（#3: コア API 3 系統＋セーブステート）へ。
+> 検証に用いた ROM は jsmolka/gba-tests（MIT・公開テスト ROM）。本番運用では自己所有カートリッジの吸い出し ROM を使用する（`.gitignore` で ROM/セーブ系を除外済み）。

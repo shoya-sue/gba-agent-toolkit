@@ -42,13 +42,15 @@ Tauri ランチャー: 「ROM 選択 → Start」で上記を一括起動（side
 
 進捗は GitHub Issues で管理しています → **[Epic #1: ロードマップ](../../issues/1)**
 
-| Phase | 内容 | Milestone | Issue |
-|---|---|---|---|
-| 0 | 環境検証・接続確認 | M1 | [#2](../../issues/2) |
-| 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) |
-| 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) |
-| 3 | MCP / Agent 連携 | M4 | [#5](../../issues/5) |
-| 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) |
+| Phase | 内容 | Milestone | Issue | 状態 |
+|---|---|---|---|---|
+| 0 | 環境検証・接続確認 | M1 | [#2](../../issues/2) | ✅ 完了（2026-07-10） |
+| 1 | コア API 3 系統＋セーブステート | M2 | [#3](../../issues/3) | ⏭ 次 |
+| 2 | ランチャー GUI (Tauri) | M3 | [#4](../../issues/4) | — |
+| 3 | MCP / Agent 連携 | M4 | [#5](../../issues/5) | — |
+| 4 | GB/GBC 対応・公開 | M5 | [#6](../../issues/6) | — |
+
+> **Phase 0 完了**: mGBA v0.10.5 + `mcp-mgba` v0.3.3（vendored `bridge.lua`）で実機疎通を確認。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値 / `mgba_screenshot`→240×160 PNG。詳細は [docs/env-verification.md](docs/env-verification.md)。
 
 各 Issue には推奨 Claude Code モデル（`model:opus` / `model:sonnet`）と effort（`effort:high` / `effort:medium`）ラベルが付与されています。
 

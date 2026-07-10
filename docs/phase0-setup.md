@@ -62,7 +62,16 @@ claude mcp add mgba --scope user mcp-mgba
 
 3つが自ROMで通れば **Phase 0 完了**。
 
-> mcp-mgba の MCP サーバ稼働（`tools/list` で 19 ツール応答）は自動テスト済み。残るは mGBA GUI での `bridge.lua` ロード（CLI 自動化不可）＋自 ROM のみ。
+> **✅ 2026-07-10 実測で Phase 0 DoD 完全達成**: `mgba_ping`→`pong` / `mgba_get_info`→ライブ値（`Title: GBA Tests / Frame: 26197`）/ `mgba_screenshot`→240×160 RGB PNG。検証記録は [docs/env-verification.md](env-verification.md)。
+
+### bridge.lua ロードの自動化（参考）
+GUI ファイルダイアログ（`File > Load script`）は画面ロック中に効かないが、以下で **ロック中でもロード可能**:
+1. `~/.config/mgba/qt.ini` の `[recentScripts]` セクションに bridge.lua の絶対パスを登録（`0=/abs/path/to/bridge.lua`）
+2. mGBA 起動後、`Tools > Scripting…` → `File > Load recent script` サブメニューの項目を AppleScript(System Events) で **メニュークリック**（ファイルダイアログを経由しないため成功する）
+
+```bash
+osascript -e 'tell application "System Events" to tell process "mGBA" to click menu item 1 of menu 1 of menu item "Load recent script" of menu 1 of menu bar item "File" of menu bar 1'
+```
 
 ## 提供ツール（mcp-mgba）
 `mgba_ping` / `mgba_get_info` / `mgba_read8|16|32` / `mgba_write8|16|32` / `mgba_read_range` / `mgba_write_range` / `mgba_press_buttons` / `mgba_advance_frames` / `mgba_pause` / `mgba_unpause` / `mgba_reset` / `mgba_screenshot` / `mgba_save_state` / `mgba_load_state`

@@ -25,8 +25,9 @@ docs/           # ロードマップ・手順書・検証記録
 - 各 Issue に推奨 `model:*` / `effort:*` ラベル
 
 ## 現状 (2026-07-10)
-- **Phase 0 進行中**: mGBA v0.10.5 導入・Lua有効確認済 / mcp-mgba 導入・bridge.lua vendor済 / セットアップ手順書 `docs/phase0-setup.md`
-- 残: 実機GUIで自ROMロード → bridge.lua ロード → `mgba_ping`/`get_info`/`screenshot`（`docs/env-verification.md` の DoD 参照）
+- **Phase 0 完了 ✅**: mGBA v0.10.5（Lua有効）+ mcp-mgba v0.3.3（bridge.lua vendor済）で**実機疎通を確認**。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値（`Title: GBA Tests / Frame: 26197`）/ `mgba_screenshot`→240×160 RGB PNG。`./scripts/test-connection.sh`→`✓ PASS`（検証記録 `docs/env-verification.md`）
+- **次: Phase 1 (#3)** — コア API 3 系統（画面取得・状態読取・入力送信）＋セーブステート
+- bridge.lua ロードは GUI 必須だが、`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動化可（画面ロック中も可）。手順は `docs/phase0-setup.md`
 
 ## ROM 方針
 自己所有カートリッジから吸い出した ROM のみ使用・**配布しない**（`.gitignore` で ROM/セーブ除外）。
