@@ -26,6 +26,12 @@
 //         STUCK_ABORT_STEPS(既定0=無効, >0 で無進捗 N ステップ継続時に stuck 中断) /
 //         COMPLETE_TITLE_CONTAINS / COMPLETE_STATE="flag=val" / COMPLETE_SCREEN_HASHES="h1,h2"
 //         （いずれか一致で「完走(completed)」として正常終了。ゲーム毎の完結定義）
+//         [自己修復・再トライ #16]
+//         RECOVER(既定1=ON, 0で無効) スタック/切断時に自動リカバリ /
+//         RECOVER_MAX_TOTAL(既定12, ラン全体のリカバリ試行上限=無限ループ防止) /
+//         FAIL_RECOVER_AFTER(既定2, 連続失敗が N でブリッジ再接続を試行) /
+//         RESTART_ROM(指定時のみ最終手段 restart-session を梯子に追加。ROM 絶対パス)
+//         リカバリ梯子: alt-input(別入力探索)→load-state(直近checkpoint復帰)→reset→restart-session
 //
 //  ※ 実 mGBA はリアルタイム動作でフレームは自然進行するため、既定では
 //    mgba_advance_frames を呼ばない（未応答ビルドで毎ステップ RPC タイムアウトし
@@ -42,6 +48,8 @@ import {
   createProgressTracker, evaluateCompletion, hashBytes,
   observationSignature, parseCompletionConditions,
 } from './lib/progress.mjs';
+import { createRecoveryController, explorationButtons } from './lib/recovery.mjs';
+import { spawnSync } from 'node:child_process';
 
 // ─────────── 純粋ヘルパー（外部依存なし・ユニットテスト対象） ───────────
 
@@ -85,6 +93,10 @@ export function buildSummary(s) {
     maxNoProgressStreak: s.maxNoProgressStreak ?? 0,
     completed: s.completed ?? false,
     completionMatched: s.completionMatched ?? [],
+    // 自己修復・再トライ (#16)
+    recoveries: s.recoveries ?? 0,
+    recoveryByStrategy: s.recoveryByStrategy ?? {},
+    recoveryGiveUp: s.recoveryGiveUp ?? false,
   };
 }
 
@@ -128,6 +140,9 @@ async function finalize(client, state, runDir) {
   console.log(`進捗=${state.progressSteps}/${state.steps} スタック信号=${state.stuckSignals} ` +
     `最大無進捗=${state.maxNoProgressStreak} ` +
     `完走=${state.completed ? `YES [${state.completionMatched.join(', ')}]` : 'no'}`);
+  const recBy = Object.entries(state.recoveryByStrategy || {}).map(([k, v]) => `${k}:${v}`).join(' ');
+  console.log(`リカバリ=${state.recoveries}${recBy ? ` (${recBy})` : ''}` +
+    `${state.recoveryGiveUp ? ' ⛔give-up' : ''}`);
   console.log(`  記録: ${runDir}`);
   try { client.close(); } catch { /* noop */ }
 }
@@ -145,8 +160,15 @@ async function main() {
   const stuckAbort = Math.max(0, parseInt(process.env.STUCK_ABORT_STEPS || '0', 10));
   const completionConditions = parseCompletionConditions(process.env);
   const tracker = createProgressTracker({ stuckAfter });
+  // 自己修復・再トライ (#16)
+  const recoverOn = process.env.RECOVER !== '0'; // 既定 ON。RECOVER=0 で無効化
+  const restartRom = process.env.RESTART_ROM || ''; // 指定時のみ restart-session を梯子に含める
+  const recoverEnabled = ['alt-input', 'load-state', 'reset', ...(restartRom ? ['restart-session'] : [])];
+  const recoverMaxTotal = Math.max(1, parseInt(process.env.RECOVER_MAX_TOTAL || '12', 10));
+  const failRecoverAfter = Math.max(1, parseInt(process.env.FAIL_RECOVER_AFTER || '2', 10));
+  const recovery = createRecoveryController({ maxTotal: recoverMaxTotal });
 
-  const client = new MgbaMcpClient();
+  let client = new MgbaMcpClient();
   await client.connect();
   const pong = await client.ping();
   if (!/pong/i.test(pong)) {
@@ -176,6 +198,8 @@ async function main() {
     maxSteps, maxSeconds: maxMs / 1000, snapshotEvery, checkpointSlot, maxFailures,
     policy: label, resume: process.env.RESUME === '1',
     stuckAfter, stuckAbort, completionConditions: completionConditions.map((c) => c.name),
+    recover: recoverOn, recoverEnabled, recoverMaxTotal, failRecoverAfter,
+    restartSession: restartRom ? true : false,
   };
   writeFileSync(join(runDir, 'meta.json'), JSON.stringify({ config, summary: null }, null, 2));
 
@@ -194,7 +218,55 @@ async function main() {
     // 進捗・完走判定 (#15)
     progressSteps: 0, stuckSignals: 0, maxNoProgressStreak: 0,
     completed: false, completionMatched: [],
+    // 自己修復・再トライ (#16)
+    recoveries: 0, recoveryByStrategy: {}, recoveryGiveUp: false,
   };
+
+  // ── 自己修復 executor (#16): 純粋ロジック(recovery.mjs)が選んだ戦略を実際に適用する ──
+  //    client を張り直す可能性があるためクロージャで外側の let client を更新する。
+  async function bridgeAlive() {
+    try { return /pong/i.test(await withTimeout(client.ping(), 3000)); }
+    catch { return false; }
+  }
+  async function reconnectClient() {
+    // mcp-mgba 子プロセスが死んだ場合の張り直し（mGBA/bridge が生存していれば復帰）。
+    try { client.close(); } catch { /* noop */ }
+    client = new MgbaMcpClient();
+    await client.connect();
+    return bridgeAlive();
+  }
+  async function restartSession() {
+    // 最重量: mGBA セッションごと再起動（ROM 必須）。stop-session → start-session。
+    if (!restartRom) return { ok: false, detail: 'RESTART_ROM 未指定' };
+    const dir = join(process.cwd(), 'launcher');
+    try { spawnSync('bash', [join(dir, 'stop-session.sh')], { timeout: 30000 }); } catch { /* noop */ }
+    const r = spawnSync('bash', [join(dir, 'start-session.sh'), '--rom', restartRom],
+      { timeout: 120000, encoding: 'utf8' });
+    const started = /RESULT:\s*OK/.test((r.stdout || '') + (r.stderr || ''));
+    if (started) { try { await reconnectClient(); } catch { /* 次段の bridgeAlive で検出 */ } }
+    return { ok: started && (await bridgeAlive()), detail: started ? 'session restarted' : 'start-session 失敗' };
+  }
+  async function applyRecovery(strategy, seed) {
+    switch (strategy) {
+      case 'alt-input': {
+        const btns = explorationButtons(seed);
+        await client.pressButtons(btns);
+        return { ok: true, detail: `alt-input ${btns.join('+')}` };
+      }
+      case 'load-state':
+        if (state.lastCheckpointSlot == null) return { ok: false, detail: 'checkpoint 未保存' };
+        await client.loadState(checkpointSlot);
+        return { ok: true, detail: `load slot ${checkpointSlot}` };
+      case 'reset':
+        await client.reset();
+        await sleep(1500); // ROM 再初期化待ち
+        return { ok: true, detail: 'soft reset' };
+      case 'restart-session':
+        return await restartSession();
+      default:
+        return { ok: false, detail: `unknown strategy ${strategy}` };
+    }
+  }
 
   let stopping = false;
   const onSignal = () => { if (!stopping) { stopping = true; console.log('\n⏸ 中断シグナル受信 → finalize します'); } };
@@ -206,7 +278,9 @@ async function main() {
   console.log(`  記録先: ${runDir}`);
   console.log(`  進捗判定: ${stuckAfter} ステップ無進捗でスタック信号` +
     `${stuckAbort > 0 ? ` / ${stuckAbort} 継続で中断` : ''}` +
-    ` / 完結条件: ${completionConditions.length ? completionConditions.map((c) => c.name).join(', ') : '(なし)'}\n`);
+    ` / 完結条件: ${completionConditions.length ? completionConditions.map((c) => c.name).join(', ') : '(なし)'}`);
+  console.log(`  自己修復: ${recoverOn ? `ON 梯子=[${recoverEnabled.join(' → ')}] 総上限=${recoverMaxTotal}` : 'OFF'}` +
+    `${restartRom ? ` / restart ROM=${restartRom}` : ''}\n`);
 
   try {
     for (let step = 0; ; step++) {
@@ -219,8 +293,9 @@ async function main() {
 
       const t0 = Date.now();
       const entry = { t: new Date().toISOString(), step, ok: false };
-      let prog = null;       // 進捗判定結果（catch 後の中断判断でも参照）
-      let completion = null; // 完結判定結果（同上）
+      let prog = null;         // 進捗判定結果（catch 後の中断判断でも参照）
+      let completion = null;   // 完結判定結果（同上）
+      let recoveryResult = null; // リカバリ発動結果（#16・entry に記録）
       try {
         // 1. 知覚
         const info = await client.getInfo();
@@ -246,7 +321,7 @@ async function main() {
           frame: info.frame, title: info.title, screenHash,
           stateKey: gameState ? JSON.stringify(gameState) : null,
         }));
-        if (prog.progressed) state.progressSteps++;
+        if (prog.progressed) { state.progressSteps++; recovery.onProgress(); } // 進捗再開で梯子リセット
         if (prog.noProgressStreak > state.maxNoProgressStreak) state.maxNoProgressStreak = prog.noProgressStreak;
         // スタック信号はしきい値をまたいだ瞬間に 1 度だけ発火（stall エピソード毎）。
         if (prog.stuck && prog.noProgressStreak === stuckAfter) {
@@ -254,6 +329,8 @@ async function main() {
           console.warn(`⚠ スタック検出: ${prog.noProgressStreak} ステップ無進捗（画面/状態/title 不変）` +
             `${prog.frozenStreak ? ` / frame 凍結 ${prog.frozenStreak}` : ''}`);
         }
+        // 自己修復トリガ (#16): スタック中は stuckAfter ステップ毎に梯子を 1 段ずつ上って介入。
+        const shouldRecover = recoverOn && prog.stuck && (prog.noProgressStreak - stuckAfter) % stuckAfter === 0;
 
         // 2. 判断
         const observation = { step, frame: info.frame, title: info.title, screenshotPath: shot, screenHash, state: gameState };
@@ -285,6 +362,25 @@ async function main() {
           state.snapshots++;
         }
 
+        // 自己修復の実行 (#16): 詰まりから抜けるため梯子の次の戦略を適用する。
+        if (shouldRecover) {
+          const plan = recovery.onStuck({ enabled: recoverEnabled });
+          if (plan.giveUp) {
+            state.recoveryGiveUp = true;
+            recoveryResult = { trigger: 'stuck', giveUp: true, reason: plan.reason };
+            console.warn(`⛔ 自己修復を諦め（${plan.reason}）`);
+          } else {
+            if (plan.backoffMs) await sleep(plan.backoffMs);
+            let res;
+            try { res = await applyRecovery(plan.strategy, plan.totalAttempt); }
+            catch (e) { res = { ok: false, detail: String(e?.message || e) }; }
+            state.recoveries++;
+            state.recoveryByStrategy[plan.strategy] = (state.recoveryByStrategy[plan.strategy] || 0) + 1;
+            recoveryResult = { trigger: 'stuck', strategy: plan.strategy, attempt: plan.totalAttempt, ok: res.ok, detail: res.detail };
+            console.warn(`🔧 リカバリ#${plan.totalAttempt} [${plan.strategy}] → ${res.ok ? 'OK' : 'NG'}（${res.detail}）`);
+          }
+        }
+
         state.steps++;
         state.consecutiveFailures = 0;
         Object.assign(entry, {
@@ -294,6 +390,7 @@ async function main() {
           progressed: prog.progressed, progressReasons: prog.reasons,
           noProgressStreak: prog.noProgressStreak, stuck: prog.stuck, frameFrozen: prog.frameFrozen,
           completed: completion.completed, completionMatched: completion.matched,
+          recovery: recoveryResult,
           durMs: Date.now() - t0,
         });
         if (step % 10 === 0 || snap) {
@@ -305,12 +402,33 @@ async function main() {
         state.consecutiveFailures++;
         Object.assign(entry, { ok: false, error: String(e?.message || e), durMs: Date.now() - t0 });
         console.warn(`⚠ step ${step} 失敗(${state.consecutiveFailures}/${maxFailures}): ${entry.error}`);
+        // 切断/クラッシュからの自己修復 (#16): 応答が無ければ mcp-mgba 再接続、
+        //   ダメなら（ROM 指定時のみ）セッション再起動を試みる。maxFailures 到達前に復帰を狙う。
+        if (recoverOn && state.consecutiveFailures >= failRecoverAfter && state.consecutiveFailures < maxFailures) {
+          const alive = await bridgeAlive();
+          if (!alive) {
+            console.warn('🔧 bridge 応答なし → mcp-mgba 再接続を試行');
+            let recovered = false;
+            try { recovered = await reconnectClient(); } catch { recovered = false; }
+            let strategy = 'reconnect';
+            if (!recovered && restartRom) {
+              console.warn('🔧 再接続失敗 → セッション再起動を試行');
+              const rr = await restartSession();
+              recovered = rr.ok; strategy = 'restart-session';
+            }
+            state.recoveries++;
+            state.recoveryByStrategy[strategy] = (state.recoveryByStrategy[strategy] || 0) + 1;
+            entry.recovery = { trigger: 'failure', strategy, ok: recovered };
+            if (recovered) { state.consecutiveFailures = 0; console.warn('🔧 復帰成功'); }
+            else console.warn('🔧 復帰できず（連続失敗が上限に達したら中断）');
+          }
+        }
         await sleep(500); // バックオフ
       }
       appendFileSync(stepsLog, JSON.stringify(entry) + '\n');
 
       // 完走したら成功終了。無進捗が STUCK_ABORT_STEPS 継続したら stuck 中断（opt-in）。
-      // ※ 自己修復・再トライ（リカバリ）は #16 の担当。ここは検出と停止のみ。
+      // ※ 詰まり自体の自己修復は上のループ内で実施済み。ここは最終的な停止判定のみ。
       if (completion?.completed) { state.stopReason = 'completed'; break; }
       if (stuckAbort > 0 && (prog?.noProgressStreak ?? 0) >= stuckAbort) {
         state.stopReason = 'stuck';
