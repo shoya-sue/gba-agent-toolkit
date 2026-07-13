@@ -22,6 +22,7 @@ set -uo pipefail
 ROM=""
 PORT="8765"
 BIND="127.0.0.1"
+MUTE="0"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BRIDGE="$REPO_ROOT/mcp-server/mgba-bridge/bridge.lua"
 MGBA_APP="/opt/homebrew/opt/mgba/mGBA.app"
@@ -39,6 +40,8 @@ while [ $# -gt 0 ]; do
     --bind)   BIND="$2"; shift 2;;
     --bridge) BRIDGE="$2"; shift 2;;
     --mgba)   MGBA_APP="$2"; shift 2;;
+    --mute)   MUTE="1"; shift;;
+    --no-mute) MUTE="0"; shift;;
     *) echo "RESULT: ERROR unknown arg: $1"; exit 2;;
   esac
 done
@@ -110,6 +113,43 @@ else:
 with io.open(ini_path, 'w', encoding='utf-8') as f:
     f.write('\n'.join(result) + '\n')
 print('qt.ini updated', file=sys.stderr)
+PY
+
+# ── 1.5) qt.ini [General] mute を冪等に設定（ゲーム音のミュート）──
+log "qt.ini [General] mute=$MUTE を設定"
+python3 - "$QT_INI" "$MUTE" <<'PY'
+import sys, re, io
+ini_path, mute = sys.argv[1], sys.argv[2]
+# mute は "1"（ミュート）/ "0"（解除）のみ許可
+mute = '1' if mute == '1' else '0'
+try:
+    with io.open(ini_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+except FileNotFoundError:
+    text = ''
+lines = text.splitlines()
+# [General] セクションを探す（無ければ先頭に作る）
+sec_start = None
+for idx, ln in enumerate(lines):
+    if ln.strip() == '[General]':
+        sec_start = idx; break
+if sec_start is None:
+    lines = ['[General]', 'mute=%s' % mute, ''] + lines
+else:
+    sec_end = len(lines)
+    for idx in range(sec_start + 1, len(lines)):
+        if re.match(r'^\[.*\]\s*$', lines[idx]):
+            sec_end = idx; break
+    # 既存 mute= を置換、無ければセクション先頭に追加（冪等）
+    replaced = False
+    for idx in range(sec_start + 1, sec_end):
+        if re.match(r'^\s*mute\s*=', lines[idx]):
+            lines[idx] = 'mute=%s' % mute; replaced = True; break
+    if not replaced:
+        lines.insert(sec_start + 1, 'mute=%s' % mute)
+with io.open(ini_path, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(lines) + '\n')
+print('qt.ini [General] mute set to %s' % mute, file=sys.stderr)
 PY
 
 # ── 2) mGBA を ROM 付きで起動 ────────────────────────────────

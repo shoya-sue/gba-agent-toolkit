@@ -15,6 +15,9 @@ struct Config {
     rom_path: String,
     port: String,
     bind: String,
+    // 既存 launcher.json（mute キー無し）との後方互換のため default を許可
+    #[serde(default)]
+    mute: bool,
 }
 
 impl Default for Config {
@@ -23,6 +26,7 @@ impl Default for Config {
             rom_path: String::new(),
             port: "8765".into(),
             bind: "127.0.0.1".into(),
+            mute: false,
         }
     }
 }
@@ -105,12 +109,13 @@ fn start_session(
     rom: String,
     port: String,
     bind: String,
+    mute: bool,
 ) -> Result<String, String> {
     let script = resolve_resource(&app, "scripts/start-session.sh", "start-session.sh");
     // bridge.lua を空白なしパスへ退避（バンドルパスの空白による Lua ロード破綻を回避）
     let bridge = stage_bridge(&app)?;
-    let out = Command::new("bash")
-        .arg(&script)
+    let mut cmd = Command::new("bash");
+    cmd.arg(&script)
         .arg("--rom")
         .arg(&rom)
         .arg("--port")
@@ -118,7 +123,10 @@ fn start_session(
         .arg("--bind")
         .arg(&bind)
         .arg("--bridge")
-        .arg(&bridge)
+        .arg(&bridge);
+    // ミュートの ON/OFF を明示的に渡す（qt.ini [General] mute を冪等に設定）
+    cmd.arg(if mute { "--mute" } else { "--no-mute" });
+    let out = cmd
         .output()
         .map_err(|e| format!("start-session.sh 実行失敗: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout);

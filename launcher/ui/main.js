@@ -20,7 +20,12 @@ function validateBind(bind) {
 async function persist() {
   try {
     await invoke("save_config", {
-      config: { rom_path: $("rom").value, port: $("port").value, bind: $("bind").value },
+      config: {
+        rom_path: $("rom").value,
+        port: $("port").value,
+        bind: $("bind").value,
+        mute: $("mute").checked,
+      },
     });
   } catch (e) {
     /* 保存失敗は致命的でない */
@@ -35,6 +40,7 @@ async function persist() {
       $("rom").value = cfg.rom_path || "";
       $("port").value = cfg.port || "8765";
       $("bind").value = cfg.bind || "127.0.0.1";
+      $("mute").checked = Boolean(cfg.mute);
     }
   } catch (e) {}
 })();
@@ -55,6 +61,7 @@ $("start").addEventListener("click", async () => {
   const rom = $("rom").value.trim();
   const port = $("port").value.trim();
   const bind = $("bind").value.trim();
+  const mute = $("mute").checked;
   if (!rom) { setStatus("ROM を選択してください", "err"); return; }
   if (!validatePort(port)) { setStatus("Port は 1–65535 の整数です", "err"); return; }
   if (!validateBind(bind)) { setStatus("Bind は localhost / 127.0.0.1 / ::1 のみ", "err"); return; }
@@ -63,7 +70,7 @@ $("start").addEventListener("click", async () => {
   $("start").disabled = true;
   await persist();
   try {
-    const out = await invoke("start_session", { rom, port, bind });
+    const out = await invoke("start_session", { rom, port, bind, mute });
     setStatus("✅ 起動成功\n" + out, "ok");
   } catch (e) {
     setStatus("❌ 起動失敗\n" + e, "err");
@@ -82,4 +89,4 @@ $("stop").addEventListener("click", async () => {
   }
 });
 
-["rom", "port", "bind"].forEach((id) => $(id).addEventListener("change", persist));
+["rom", "port", "bind", "mute"].forEach((id) => $(id).addEventListener("change", persist));
