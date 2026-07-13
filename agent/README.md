@@ -9,25 +9,34 @@
 ```
 agent/
 ├── lib/mcp-client.mjs        # mcp-mgba を stdio 駆動する MCP クライアント（共有基盤）
-├── policies/demo-policy.mjs  # 「判断」の実装（★将来 LLM に差し替える拡張点）
-├── play-loop.mjs             # 知覚→判断→行動 ループ PoC
+├── lib/ollama-client.mjs     # ローカル LLM(ollama) の最小 HTTP クライアント
+├── policies/demo-policy.mjs  # 「判断」の決定的デモ
+├── policies/llm-policy.mjs   # 「判断」のローカル LLM 実接続（★自律プレイ）
+├── play-loop.mjs             # 知覚→判断→行動 ループ PoC（POLICY で切替）
 └── trial-and-error.mjs       # セーブステート試行錯誤・分岐探索
 ```
 
 ## 使い方
 ```bash
 # 前提: mGBA + bridge.lua 稼働（../launcher/start-session.sh --rom <ROM>）
-node play-loop.mjs 6         # 知覚→判断→行動 を 6 ステップ
-node trial-and-error.mjs     # save→分岐A→load→分岐B の試行錯誤
+node play-loop.mjs 6                                   # 決定的デモで 6 ステップ
+POLICY=llm OLLAMA_MODEL=qwen2.5:7b node play-loop.mjs 20   # ローカル LLM(text) 自律 20 ステップ
+POLICY=llm OLLAMA_MODEL=moondream OLLAMA_VISION=1 node play-loop.mjs 20  # vision LLM(画面添付)
+node trial-and-error.mjs                              # save→分岐A→load→分岐B の試行錯誤
 ```
 
-## ローカル LLM への拡張
-`play-loop.mjs` の `const policy = demoPolicy;` を LLM ポリシーに差し替えるだけ。
-`observation.screenshotPath`(PNG) と `observation.info` を LLM に渡し `{buttons:[...]}` を推論させる（`policies/demo-policy.mjs` の `llmPolicyStub` が雛形）。ハーネス本体は無改造で自律プレイに移行できる。
+## ローカル LLM 自律プレイ（Issue #8）
+`policies/llm-policy.mjs` が [ollama](https://ollama.com/) のローカル LLM に observation を渡し、
+次に押すボタンを JSON 推論する。`VALID_BUTTONS` への正規化・不正値フィルタ・リトライ・安全 fallback 付き。
+- `POLICY=llm` で有効化。`OLLAMA_MODEL` でモデル、`OLLAMA_VISION=1` で画面 PNG 添付（vision モデル）。
+- 別バックエンドも `(observation)=>{buttons,note}` を実装して `play-loop.mjs` の `policy` に渡すだけ（ハーネス無改造）。
+- 手順詳細: [../docs/agent-integration.md](../docs/agent-integration.md)
 
 ## 検証（2026-07-10・実機）
-- `play-loop.mjs`: 6 ステップ全てで 知覚→判断→行動 成立（frame 11009→14070）
+- `play-loop.mjs`(demo): 6 ステップ全てで 知覚→判断→行動 成立（frame 11009→14070）
 - `trial-and-error.mjs`: save@18481 → 分岐A → `load_state`→18496 巻戻り成功 → 分岐B → 比較
+- **LLM(text, qwen2.5:7b)**: 20 ステップ自律走行、全ステップ LLM がボタン決定（Down×18/Start×2、frame→36872）
+- **LLM(vision, moondream + 画面PNG)**: 5 ステップ走行、画面添付で判断（無効出力は安全 fallback で処理）
 
 ## 参考実装
 - [`minpeter/pss-mgba`](https://github.com/minpeter/pss-mgba)（Pokemon 自律ハーネス, TS）

@@ -17,10 +17,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MgbaMcpClient, sleep } from './lib/mcp-client.mjs';
 import { demoPolicy, VALID_BUTTONS } from './policies/demo-policy.mjs';
+import { createLlmPolicy } from './policies/llm-policy.mjs';
+import { ollamaHasModel } from './lib/ollama-client.mjs';
 
 const STEPS = parseInt(process.argv[2] || '6', 10);
-// 判断関数（★ここを llmPolicy に差し替えれば自律プレイ）
-const policy = demoPolicy;
+// 判断関数の選択:
+//   POLICY=demo（既定）… 決定的デモ
+//   POLICY=llm         … ローカル LLM(ollama)。OLLAMA_MODEL でモデル指定、
+//                        OLLAMA_VISION=1 で画面 PNG を添付（vision モデル向け）
+const POLICY = process.env.POLICY || 'demo';
+const policy =
+  POLICY === 'llm'
+    ? createLlmPolicy({ vision: process.env.OLLAMA_VISION === '1' })
+    : demoPolicy;
 
 async function main() {
   const client = new MgbaMcpClient();
@@ -32,8 +41,23 @@ async function main() {
     client.close();
     process.exit(2);
   }
+  // POLICY=llm のときは ollama とモデルの存在を先に確認（毎ステップ失敗の空振り回避）
+  if (POLICY === 'llm') {
+    const mdl = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+    if (!(await ollamaHasModel(mdl))) {
+      console.error(
+        `✗ ollama にモデル "${mdl}" が見つかりません（${process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}）。\n` +
+        `  ollama 起動と \`ollama pull ${mdl}\` を確認してください。`
+      );
+      client.close();
+      process.exit(2);
+    }
+  }
   const outDir = mkdtempSync(join(tmpdir(), 'gba-agent-loop-'));
-  console.log(`▶ 知覚→判断→行動 ループ開始（${STEPS} ステップ）`);
+  const policyLabel = POLICY === 'llm'
+    ? `LLM(ollama ${process.env.OLLAMA_MODEL || 'qwen2.5:7b'}${process.env.OLLAMA_VISION === '1' ? ', vision' : ''})`
+    : 'demo';
+  console.log(`▶ 知覚→判断→行動 ループ開始（${STEPS} ステップ, policy=${policyLabel}）`);
   console.log(`  スクリーンショット保存先: ${outDir}\n`);
 
   for (let step = 0; step < STEPS; step++) {
@@ -47,9 +71,13 @@ async function main() {
     }
     const observation = { step, frame: info.frame, title: info.title, screenshotPath: savedShot };
 
-    // 2. 判断（policy = 将来 LLM）
-    const decision = policy(observation);
-    const buttons = (decision.buttons || []).filter((b) => VALID_BUTTONS.includes(b));
+    // 2. 判断（policy = デモ or ローカル LLM）
+    const decision = await policy(observation);
+    // policy が不正形（null / buttons 非配列）を返しても落とさず「何も押さない」に丸める
+    const buttons = Array.isArray(decision?.buttons)
+      ? decision.buttons.filter((b) => VALID_BUTTONS.includes(b))
+      : [];
+    const note = decision?.note ?? '';
 
     // 3. 行動
     if (buttons.length) await client.pressButtons(buttons);
@@ -58,7 +86,7 @@ async function main() {
 
     console.log(
       `step ${step}: frame=${info.frame} 知覚[${info.title}] ` +
-      `→ 判断[${buttons.join('+') || '(なし)'}: ${decision.note}] ` +
+      `→ 判断[${buttons.join('+') || '(なし)'}: ${note}] ` +
       `→ 行動✓ ${savedShot ? '📷' : ''}`
     );
   }

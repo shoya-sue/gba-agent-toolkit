@@ -1,13 +1,12 @@
 // =============================================================
-//  demo-policy.mjs ― サンプル「判断（policy）」実装
+//  demo-policy.mjs ― 決定的な「判断（policy）」デモ実装
 //
-//  知覚→判断→行動ループの「判断」部分。observation を受け取り、
-//  次に押すボタン列を返す純粋関数として定義する。
+//  知覚→判断→行動ループの「判断」部分の最小例。observation を受け取り、
+//  次に押すボタン列を返す純粋関数。実ゲームの意味判断はしない。
 //
-//  ★ ここが将来ローカル LLM に差し替わる拡張ポイント ★
-//  observation.screenshotPath の画像と observation.info を LLM に渡し、
-//  「次に押すべきボタン」を推論させる llmPolicy に置き換えれば、
-//  ハーネス本体（play-loop.mjs）は無改造で自律プレイに移行できる。
+//  ローカル LLM による実「判断」は policies/llm-policy.mjs を参照
+//  （play-loop.mjs を POLICY=llm で起動すると自律プレイになる）。
+//  VALID_BUTTONS は llm-policy / play-loop の入力検証でも共有される。
 // =============================================================
 
 /**
@@ -27,19 +26,6 @@ export function demoPolicy(obs) {
     { buttons: ['Down'], note: '移動(下)' },
   ];
   return sequence[obs.step % sequence.length];
-}
-
-/**
- * ローカル LLM 差し替えの雛形（未接続）。
- * 実装時は screenshotPath を base64 で読み、Claude/ローカル LLM に
- * 「この画面で次に押すべき GBA ボタンを JSON で返せ」と問い合わせる。
- * @returns {Promise<{buttons:string[], note:string}>}
- */
-export async function llmPolicyStub(/* obs, { callModel } */) {
-  throw new Error(
-    'llmPolicyStub は未接続です。observation.screenshotPath を LLM に渡し ' +
-    '{buttons:[...]} を推論する実装に置き換えてください。'
-  );
 }
 
 /** 有効な GBA ボタン名（policy の返り値検証用） */
