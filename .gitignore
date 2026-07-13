@@ -18,6 +18,8 @@ roms/
 saves/
 states/
 bios/
+# プレイスルーハーネスの実行記録（ログ・スクショ・スナップショット）
+runs/
 
 # --- OS ---
 .DS_Store

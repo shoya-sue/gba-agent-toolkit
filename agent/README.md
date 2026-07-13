@@ -14,6 +14,8 @@ agent/
 ├── policies/llm-policy.mjs       # 「判断」のローカル LLM 実接続（★自律プレイ）
 ├── policies/llm-policy.test.mjs  # llm-policy 純粋関数のユニットテスト（node:test, 21件）
 ├── play-loop.mjs                 # 知覚→判断→行動 ループ PoC（POLICY で切替）
+├── playthrough.mjs               # プレイスルー・テストハーネス基盤（長時間ループ・記録・再開, #14）
+├── playthrough.test.mjs          # playthrough 純粋ヘルパーのユニットテスト（node:test, 11件）
 └── trial-and-error.mjs           # セーブステート試行錯誤・分岐探索
 ```
 
@@ -25,8 +27,17 @@ POLICY=llm OLLAMA_MODEL=qwen2.5:7b node play-loop.mjs 20   # ローカル LLM(te
 POLICY=llm OLLAMA_MODEL=moondream OLLAMA_VISION=1 node play-loop.mjs 20  # vision LLM(画面添付)
 node trial-and-error.mjs                              # save→分岐A→load→分岐B の試行錯誤
 
+# プレイスルー・テストハーネス（長時間自律プレイ・記録/再開, #14）
+SNAPSHOT_EVERY=25 node playthrough.mjs 500             # 最大500ステップ, 25毎にスクショ+checkpoint
+POLICY=llm OLLAMA_MODEL=qwen2.5:7b node playthrough.mjs 300   # ローカル LLM で長時間自律
+RESUME=1 node playthrough.mjs 500                     # 直近 checkpoint(セーブステート)から再開
+#   記録: runs/<runId>/（meta.json=config+summary / steps.jsonl / screenshots）。Ctrl+C で安全に finalize
+#   env: MAX_SECONDS / STEP_DELAY_MS(既定250) / SNAPSHOT_EVERY(既定25) / CHECKPOINT_SLOT / MAX_FAILURES
+#        ADVANCE_FRAMES(既定0。実mGBAはリアルタイム進行のため frameAdvance 非対応ビルドでは呼ばない)
+
 # ユニットテスト（mGBA/ollama 不要・純粋関数のみ）
 node --test policies/llm-policy.test.mjs              # llm-policy 正規化/JSON抽出 21件
+node --test playthrough.test.mjs                     # playthrough ループ制御/サマリ 11件
 ```
 
 ## ローカル LLM 自律プレイ（Issue #8）
