@@ -22,11 +22,11 @@ docs/           # ロードマップ・手順書・検証記録
 
 ## Roadmap (GitHub Issues)
 - Epic #1 / Phase 0〜4（#2〜#6）/ 後続 #8(LLM実接続)・#9(tauri build)・#10(実ROM検証) / セッションログ #7 → **すべて close 済（2026-07-13）**
-- **次期(OPEN) — 自律プレイスルー完走テスト**: **Epic #13**（現状は「起動＋操作」止まり → 自立稼働でゲームを一通りプレイして完結を保証）配下に #14 ハーネス基盤 / #15 進捗・完走判定 / #16 スタック検出・リカバリ・再トライ(self-healing 中核) / #17 E2E完走+合否レポート。判断・状態の基盤: #11(LLM判断強化)・#12(状態アドレス読取)。各 Issue に推奨 `model:*` / `effort:*` ラベル
+- **次期 — 自律プレイスルー完走テスト**: **Epic #13**（現状は「起動＋操作」止まり → 自立稼働でゲームを一通りプレイして完結を保証）配下に ✅#14 ハーネス基盤 / ✅#15 進捗・完走判定 / #16 スタック検出・リカバリ・再トライ(self-healing 中核・OPEN) / #17 E2E完走+合否レポート(OPEN)。判断・状態の基盤: #11(LLM判断強化)・#12(状態アドレス読取)。各 Issue に推奨 `model:*` / `effort:*` ラベル
 
 ## 現状 (2026-07-13) — 初期ロードマップ完遂 → 自律完走テスト着手
-初期ロードマップ（Phase 0〜4 ＋ #8/#9/#10 ＋ 品質基盤）は**全て完了**。次段階として **Epic #13「自律プレイスルー完走テスト」** に着手済み（土台 #14 完了、#15/#16/#17 が OPEN）。
-- **OPEN issue（6件）**: Epic #13 + sub #15(進捗/完走判定)/#16(スタック検出・self-healing)/#17(E2E完走・合否レポート)、判断強化 #11 / 状態アドレス読取 #12
+初期ロードマップ（Phase 0〜4 ＋ #8/#9/#10 ＋ 品質基盤）は**全て完了**。次段階として **Epic #13「自律プレイスルー完走テスト」** に着手済み（土台 #14・進捗/完走判定 #15 完了、#16/#17 が OPEN）。
+- **OPEN issue（5件）**: Epic #13 + sub #16(スタック検出・self-healing・中核)/#17(E2E完走・合否レポート)、判断強化 #11 / 状態アドレス読取 #12
 - **Phase 0〜4 ✅**（#2〜#6, close）: 環境検証 / GBA コア API(`verify-phase1.mjs` 10/10) / Tauri ランチャー / MCP・Agent 連携 / GB・GBC(PyBoy `test_pyboy_api.py` 12/12)
 - **#8 ✅**（`517328d`）ローカル LLM(ollama) ポリシー実接続（`agent/policies/llm-policy.mjs`、text/vision、`POLICY=llm` 切替。監査後ハードニング済）
 - **#9 ✅**（`baf0e8d`）`tauri build` で `.app`/`.dmg` バンドル。**空白パスで Lua `require("json")` 破綻→空白なしパス（`~/.config/gba-agent-toolkit/mgba-bridge/`）へ stage** する対策
@@ -34,6 +34,7 @@ docs/           # ロードマップ・手順書・検証記録
 - **品質基盤 ✅**（`9b26b3e`）`agent/policies/llm-policy.test.mjs`(node:test 21件) + GitHub Actions CI(`.github/workflows/ci.yml`、Node 構文/テスト・Python py_compile、実行成功)
 - **#14 ✅**（`d0f6262`）プレイスルー・テストハーネス基盤 `agent/playthrough.mjs`（長時間自律ループ・`runs/<id>/` 記録・SIGINT 安全終了・checkpoint 再開、unit 11件）。**知見**: 実 mGBA ビルドは `frameAdvance`/`pause`/`unpause` 非搭載（リアルタイム進行）→ `advance_frames` は既定 OFF（`ADVANCE_FRAMES` opt-in）で 10s RPC タイムアウト回避
 - **#18 ✅**（`e438864`）ランチャー GUI にゲーム音ミュート・トグル。`start-session.sh --mute/--no-mute` → qt.ini `[General] mute` を冪等設定（起動時反映・ライブ切替は対象外）。`launcher.json` 永続化
+- **#15 ✅**（`9ab26f1`）進捗・完走判定 `agent/lib/progress.mjs`（純粋ロジック・unit 21件）を `playthrough.mjs` に統合。**進捗=画面PNGハッシュ/状態/title の変化**（実mGBAは frame 常時進行のため frame 単独は進捗と見なさない・frame停止は frameFrozen）。N無進捗で**スタック信号**(#16入力)。**完結条件はプラガブル**（title/状態#12/画面ハッシュ・env設定）で一致時 `stop=completed`。実FF ROMで進捗4/12・スタック発火・title一致 completed(exit0)・偽陽性なしを確認
 - **セキュリティ ✅**: CSP 設定・入力検証(port/bind)・JS 外部化。vendored bridge.lua 非改変（信頼境界=localhost単一ユーザー）。`docs/SECURITY.md`
 - 検証記録 `docs/env-verification.md` / 全体 INDEX `docs/INDEX.md`
 - **運用知見**: bridge.lua は ROM ロード後のみ有効（`emu` 未定義クラッシュ回避）。`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動ロード可（画面ロック中も可）
