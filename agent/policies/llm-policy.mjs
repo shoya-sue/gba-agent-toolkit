@@ -17,7 +17,7 @@ import { VALID_BUTTONS } from './demo-policy.mjs';
 const CANON = new Map(VALID_BUTTONS.map((b) => [b.toLowerCase(), b]));
 const ALIAS = { u: 'Up', d: 'Down' };
 
-function normalizeButtons(arr) {
+export function normalizeButtons(arr) {
   if (!Array.isArray(arr)) return [];
   const out = [];
   for (const raw of arr) {
@@ -29,7 +29,7 @@ function normalizeButtons(arr) {
   return out.slice(0, 3); // 1 ステップ最大 3 ボタン
 }
 
-function extractJson(text) {
+export function extractJson(text) {
   // format:json でも稀に前後にゴミが付くため、最初の完結した {...} を拾う。
   // greedy な /\{[\s\S]*\}/ は複数オブジェクト時に過剰マッチするため、
   // 波括弧の深さを数えて最初のバランスした塊を抽出する。

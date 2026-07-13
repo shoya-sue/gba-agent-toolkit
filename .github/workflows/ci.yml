@@ -1,0 +1,44 @@
+name: CI
+
+# mGBA / ollama / 実 ROM を要する検証は CI 非対応（ローカル実機のみ）。
+# ここでは外部依存なしで回る「構文チェック + 純粋関数ユニットテスト」を実行する。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  node:
+    name: Node syntax + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check (node --check) 全 .mjs
+        run: |
+          set -eo pipefail
+          git ls-files '*.mjs' | while read -r f; do
+            echo "check $f"; node --check "$f" || exit 1
+          done
+      - name: Unit tests (node:test / 外部依存なし)
+        run: |
+          set -eo pipefail
+          git ls-files '*.test.mjs' | xargs -r node --test
+
+  python:
+    name: Python syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Syntax check (py_compile) PyBoy 経路
+        run: |
+          set -e
+          python -m py_compile mcp-server/pyboy/pyboy_bridge.py \
+                               mcp-server/pyboy/mcp_server.py \
+                               mcp-server/pyboy/test_pyboy_api.py
