@@ -21,18 +21,27 @@
 //         MAX_FAILURES(既定5) / RUN_DIR(出力先上書き) / RESUME=1
 //         STEP_DELAY_MS(既定250, ステップ間の実時間ディレイ=リアルタイム進行量)
 //         ADVANCE_FRAMES(既定0=呼ばない。>0 で headless/一時停止ビルド向けに frameAdvance)
+//         [進捗・完走判定 #15]
+//         STUCK_STEPS(既定12, N ステップ無進捗でスタック信号) /
+//         STUCK_ABORT_STEPS(既定0=無効, >0 で無進捗 N ステップ継続時に stuck 中断) /
+//         COMPLETE_TITLE_CONTAINS / COMPLETE_STATE="flag=val" / COMPLETE_SCREEN_HASHES="h1,h2"
+//         （いずれか一致で「完走(completed)」として正常終了。ゲーム毎の完結定義）
 //
 //  ※ 実 mGBA はリアルタイム動作でフレームは自然進行するため、既定では
 //    mgba_advance_frames を呼ばない（未応答ビルドで毎ステップ RPC タイムアウトし
 //    10 秒/step 停滞するのを回避）。ステップ間隔は STEP_DELAY_MS で制御する。
 //  終了コード: 0=正常終了(上限到達/中断) / 1=連続失敗で中断 / 2=起動不能
 // =============================================================
-import { existsSync, copyFileSync, mkdirSync, appendFileSync, writeFileSync } from 'node:fs';
+import { existsSync, copyFileSync, mkdirSync, appendFileSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MgbaMcpClient, sleep } from './lib/mcp-client.mjs';
 import { demoPolicy, VALID_BUTTONS } from './policies/demo-policy.mjs';
 import { createLlmPolicy } from './policies/llm-policy.mjs';
 import { ollamaHasModel } from './lib/ollama-client.mjs';
+import {
+  createProgressTracker, evaluateCompletion, hashBytes,
+  observationSignature, parseCompletionConditions,
+} from './lib/progress.mjs';
 
 // ─────────── 純粋ヘルパー（外部依存なし・ユニットテスト対象） ───────────
 
@@ -70,6 +79,12 @@ export function buildSummary(s) {
     lastCheckpointSlot: s.lastCheckpointSlot,
     startedAt: s.startedAt,
     endedAt: s.endedAt,
+    // 進捗・完走判定 (#15)
+    progressSteps: s.progressSteps ?? 0,
+    stuckSignals: s.stuckSignals ?? 0,
+    maxNoProgressStreak: s.maxNoProgressStreak ?? 0,
+    completed: s.completed ?? false,
+    completionMatched: s.completionMatched ?? [],
   };
 }
 
@@ -110,6 +125,9 @@ async function finalize(client, state, runDir) {
   console.log('\n──────── プレイスルー サマリ ────────');
   console.log(`stop=${state.stopReason} steps=${state.steps} frame進行=${summary.frameProgress} ` +
     `snapshot=${state.snapshots} error=${state.errors} 所要=${Math.round(state.elapsedMs / 1000)}s`);
+  console.log(`進捗=${state.progressSteps}/${state.steps} スタック信号=${state.stuckSignals} ` +
+    `最大無進捗=${state.maxNoProgressStreak} ` +
+    `完走=${state.completed ? `YES [${state.completionMatched.join(', ')}]` : 'no'}`);
   console.log(`  記録: ${runDir}`);
   try { client.close(); } catch { /* noop */ }
 }
@@ -122,6 +140,11 @@ async function main() {
   const maxFailures = Math.max(1, parseInt(process.env.MAX_FAILURES || '5', 10));
   const stepDelayMs = Math.max(0, parseInt(process.env.STEP_DELAY_MS || '250', 10));
   const advanceFramesN = Math.max(0, parseInt(process.env.ADVANCE_FRAMES || '0', 10));
+  // 進捗・完走判定 (#15)
+  const stuckAfter = Math.max(1, parseInt(process.env.STUCK_STEPS || '12', 10));
+  const stuckAbort = Math.max(0, parseInt(process.env.STUCK_ABORT_STEPS || '0', 10));
+  const completionConditions = parseCompletionConditions(process.env);
+  const tracker = createProgressTracker({ stuckAfter });
 
   const client = new MgbaMcpClient();
   await client.connect();
@@ -152,6 +175,7 @@ async function main() {
   const config = {
     maxSteps, maxSeconds: maxMs / 1000, snapshotEvery, checkpointSlot, maxFailures,
     policy: label, resume: process.env.RESUME === '1',
+    stuckAfter, stuckAbort, completionConditions: completionConditions.map((c) => c.name),
   };
   writeFileSync(join(runDir, 'meta.json'), JSON.stringify({ config, summary: null }, null, 2));
 
@@ -167,6 +191,9 @@ async function main() {
     snapshots: 0, errors: 0, consecutiveFailures: 0,
     stopReason: null, startedAt: startedAt.toISOString(), endedAt: null, elapsedMs: 0,
     lastCheckpointSlot: null,
+    // 進捗・完走判定 (#15)
+    progressSteps: 0, stuckSignals: 0, maxNoProgressStreak: 0,
+    completed: false, completionMatched: [],
   };
 
   let stopping = false;
@@ -176,7 +203,10 @@ async function main() {
 
   const startMs = Date.now();
   console.log(`▶ プレイスルー開始（最大 ${maxSteps} ステップ / ${maxMs / 1000}s, policy=${label}）`);
-  console.log(`  記録先: ${runDir}\n`);
+  console.log(`  記録先: ${runDir}`);
+  console.log(`  進捗判定: ${stuckAfter} ステップ無進捗でスタック信号` +
+    `${stuckAbort > 0 ? ` / ${stuckAbort} 継続で中断` : ''}` +
+    ` / 完結条件: ${completionConditions.length ? completionConditions.map((c) => c.name).join(', ') : '(なし)'}\n`);
 
   try {
     for (let step = 0; ; step++) {
@@ -189,6 +219,8 @@ async function main() {
 
       const t0 = Date.now();
       const entry = { t: new Date().toISOString(), step, ok: false };
+      let prog = null;       // 進捗判定結果（catch 後の中断判断でも参照）
+      let completion = null; // 完結判定結果（同上）
       try {
         // 1. 知覚
         const info = await client.getInfo();
@@ -203,13 +235,41 @@ async function main() {
           copyFileSync(shot, savedShot);
         }
 
+        // 1.5 進捗判定 (#15): 画面 PNG ハッシュ・title・(状態#12) の変化で「進んだか」を見る。
+        //     実 mGBA は frame が常に進むので frame "だけ" では進捗と見なさない。
+        let screenHash = null;
+        if (shot && existsSync(shot)) {
+          try { screenHash = hashBytes(readFileSync(shot)); } catch { /* 読めなければ null */ }
+        }
+        const gameState = null; // #12（状態アドレス読取）で HP/座標/フラグ を載せる予定
+        prog = tracker.update(observationSignature({
+          frame: info.frame, title: info.title, screenHash,
+          stateKey: gameState ? JSON.stringify(gameState) : null,
+        }));
+        if (prog.progressed) state.progressSteps++;
+        if (prog.noProgressStreak > state.maxNoProgressStreak) state.maxNoProgressStreak = prog.noProgressStreak;
+        // スタック信号はしきい値をまたいだ瞬間に 1 度だけ発火（stall エピソード毎）。
+        if (prog.stuck && prog.noProgressStreak === stuckAfter) {
+          state.stuckSignals++;
+          console.warn(`⚠ スタック検出: ${prog.noProgressStreak} ステップ無進捗（画面/状態/title 不変）` +
+            `${prog.frozenStreak ? ` / frame 凍結 ${prog.frozenStreak}` : ''}`);
+        }
+
         // 2. 判断
-        const observation = { step, frame: info.frame, title: info.title, screenshotPath: shot };
+        const observation = { step, frame: info.frame, title: info.title, screenshotPath: shot, screenHash, state: gameState };
         const dec = await policy(observation);
         const buttons = Array.isArray(dec?.buttons)
           ? dec.buttons.filter((b) => VALID_BUTTONS.includes(b))
           : [];
         const note = dec?.note ?? '';
+
+        // 完結判定 (#15): ゲーム毎の完結条件（title/状態/画面ハッシュ）に一致したら完走。
+        completion = evaluateCompletion(observation, completionConditions);
+        if (completion.completed && !state.completed) {
+          state.completed = true;
+          state.completionMatched = completion.matched;
+          console.log(`🏁 完結検出: [${completion.matched.join(', ')}] → 完走とみなす`);
+        }
 
         // 3. 行動
         if (buttons.length) await client.pressButtons(buttons);
@@ -230,6 +290,10 @@ async function main() {
         Object.assign(entry, {
           ok: true, frame: info.frame, title: info.title,
           buttons, note, snapshot: snap, savedShot: savedShot ? true : false,
+          screenHash,
+          progressed: prog.progressed, progressReasons: prog.reasons,
+          noProgressStreak: prog.noProgressStreak, stuck: prog.stuck, frameFrozen: prog.frameFrozen,
+          completed: completion.completed, completionMatched: completion.matched,
           durMs: Date.now() - t0,
         });
         if (step % 10 === 0 || snap) {
@@ -244,6 +308,15 @@ async function main() {
         await sleep(500); // バックオフ
       }
       appendFileSync(stepsLog, JSON.stringify(entry) + '\n');
+
+      // 完走したら成功終了。無進捗が STUCK_ABORT_STEPS 継続したら stuck 中断（opt-in）。
+      // ※ 自己修復・再トライ（リカバリ）は #16 の担当。ここは検出と停止のみ。
+      if (completion?.completed) { state.stopReason = 'completed'; break; }
+      if (stuckAbort > 0 && (prog?.noProgressStreak ?? 0) >= stuckAbort) {
+        state.stopReason = 'stuck';
+        console.warn(`⛔ 無進捗が ${stuckAbort} ステップ継続 → 中断（stuck / リカバリは #16）`);
+        break;
+      }
       await sleep(80);
     }
   } finally {
