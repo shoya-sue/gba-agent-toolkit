@@ -21,8 +21,8 @@ docs/           # ロードマップ・手順書・検証記録
 ```
 
 ## Roadmap (GitHub Issues)
-- Epic #1 / Phase 0〜4（#2〜#6）/ 後続 #8(LLM実接続)・#9(tauri build)・#10(実ROM検証) / セッションログ #7
-- **全 issue(#1〜#10) close 済（2026-07-13, OPEN 0 件）**。各 Issue に推奨 `model:*` / `effort:*` ラベル
+- Epic #1 / Phase 0〜4（#2〜#6）/ 後続 #8(LLM実接続)・#9(tauri build)・#10(実ROM検証) / セッションログ #7 → **すべて close 済（2026-07-13）**
+- **次期(OPEN)**: #11 ローカル LLM 判断の強化（強い vision / Claude 接続）/ #12 実ゲーム状態アドレス読取・報酬設計。各 Issue に推奨 `model:*` / `effort:*` ラベル
 
 ## 現状 (2026-07-13) — ロードマップ完遂・全 issue close
 全 Phase(0〜4) ＋ 後続 enhancement(#8/#9) ＋ 実 ROM 検証(#10) ＋ 品質基盤 まで完了。**OPEN issue は 0 件**。
