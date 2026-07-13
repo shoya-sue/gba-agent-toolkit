@@ -21,20 +21,25 @@ docs/           # ロードマップ・手順書・検証記録
 ```
 
 ## Roadmap (GitHub Issues)
-- Epic #1 / Phase 0 #2 / Phase 1 #3 / Phase 2 #4 / Phase 3 #5 / Phase 4 #6
-- 各 Issue に推奨 `model:*` / `effort:*` ラベル
+- Epic #1 / Phase 0〜4（#2〜#6）/ 後続 #8(LLM実接続)・#9(tauri build)・#10(実ROM検証) / セッションログ #7
+- **全 issue(#1〜#10) close 済（2026-07-13, OPEN 0 件）**。各 Issue に推奨 `model:*` / `effort:*` ラベル
 
-## 現状 (2026-07-10)
-- **Phase 0 完了 ✅**: mGBA v0.10.5（Lua有効）+ mcp-mgba v0.3.3（bridge.lua vendor済）で**実機疎通を確認**。`mgba_ping`→`pong` / `mgba_get_info`→ライブ値（`Title: GBA Tests / Frame: 26197`）/ `mgba_screenshot`→240×160 RGB PNG。`./scripts/test-connection.sh`→`✓ PASS`（検証記録 `docs/env-verification.md`）
-- **Phase 1 完了 ✅**: コア API 3 系統（画面取得・入力送信・メモリ読取）＋セーブステートを実機検証。`scripts/verify-phase1.mjs`→**10/10 PASS**（メモリ読取で ROM タイトル "GBA Tests" を実読取・save/load でフレーム巻戻り確認）。API 仕様書 `docs/api-reference.md`。bind は `127.0.0.1` 固定
-- **Phase 2 完了 ✅**: Tauri v2 ランチャー `launcher/`（`start-session.sh` オーケストレーション + Rust コマンド + `ui/index.html`）。「ROM選択→Start」で mGBA+ROM+bridge.lua 自動ロード+MCP疎通を一括実行。コールドスタート実機検証 `RESULT: OK`、`cargo build` 成功（tauri 2.11.5）。仕様 `docs/phase2-launcher.md`
-- **Phase 3 完了 ✅**: MCP/Agent 連携。`agent/`（`lib/mcp-client.mjs` + `policies/demo-policy.mjs` + `play-loop.mjs` + `trial-and-error.mjs`）。知覚→判断→行動ループと セーブステート試行錯誤を実機検証（play-loop 6ステップ / trial-and-error で load 巻戻り成功）。判断関数の差し替えでローカル LLM 自律プレイに拡張可。手順 `docs/agent-integration.md`
-- **セキュリティ**: レビュー実施→ CSP 設定・入力検証(port/bind)・JS 外部化を修正。vendored bridge.lua は非改変（信頼境界=localhost単一ユーザー、任意メモリ読取は中核機能）。方針は `docs/SECURITY.md`
-- **Phase 4 完了 ✅**: GB/GBC 対応（PyBoy v2.7.0/LGPL-3.0-only）。`mcp-server/pyboy/`（`pyboy_bridge.py` + `mcp_server.py`(Python mcp SDK, `pyboy_*` 10ツール) + `test_pyboy_api.py`）。GB(DMG)/GBC(CGB) 両モードで **12/12 PASS**（画面/入力/メモリ/セーブ、libbet.gb で検証）。全体 INDEX は `docs/INDEX.md`
-- **#9 完了 ✅**（`baf0e8d`）: launcher の `tauri build` で `.app`/`.dmg` バンドル + scripts/bridge.lua 同梱。空白パスで Lua `require("json")` 破綻 → 空白なしパス（`~/.config/gba-agent-toolkit/mgba-bridge/`）へ stage する対策を実装
-- **#8 完了 ✅**（`517328d`）: ローカル LLM(ollama) ポリシーを play-loop に実接続。`agent/lib/ollama-client.mjs` + `agent/policies/llm-policy.mjs`（プロンプト→`format:json`推論→`VALID_BUTTONS`正規化・不正値フィルタ・リトライ・安全fallback）。`POLICY=llm`/`OLLAMA_MODEL`/`OLLAMA_VISION=1` で切替。text(qwen2.5:7b) 20ステップ / vision(moondream) 5ステップ自律走行を実機検証。手順 `docs/agent-integration.md`
-- **ロードマップ全 Phase 完了 🎉**（#2〜#6 close）+ 後続 #8/#9 消化。**残オープン: #10（自ROM通し確認・実ROM要）/ Epic #1 / セッションログ #7**
-- bridge.lua ロードは GUI 必須だが、`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動化可（画面ロック中も可）。Phase 2 の自動ロードはこの方式を採用。手順は `docs/phase0-setup.md`
+## 現状 (2026-07-13) — ロードマップ完遂・全 issue close
+全 Phase(0〜4) ＋ 後続 enhancement(#8/#9) ＋ 実 ROM 検証(#10) ＋ 品質基盤 まで完了。**OPEN issue は 0 件**。
+- **Phase 0〜4 ✅**（#2〜#6, close）: 環境検証 / GBA コア API(`verify-phase1.mjs` 10/10) / Tauri ランチャー / MCP・Agent 連携 / GB・GBC(PyBoy `test_pyboy_api.py` 12/12)
+- **#8 ✅**（`517328d`）ローカル LLM(ollama) ポリシー実接続（`agent/policies/llm-policy.mjs`、text/vision、`POLICY=llm` 切替。監査後ハードニング済）
+- **#9 ✅**（`baf0e8d`）`tauri build` で `.app`/`.dmg` バンドル。**空白パスで Lua `require("json")` 破綻→空白なしパス（`~/.config/gba-agent-toolkit/mgba-bridge/`）へ stage** する対策
+- **#10 ✅**（`22363cc`）自己所有 GBA ROM で基本 API **6/6**・自律ループ text **8/8**+vision **5/5**（画面把握を目視＋vision LLM 読取で確認）/ GB 公開ROM 12/12。ランナー `scripts/verify-phase10.sh`（拡張子で GBA/GB 自動判定・ROM 非依存プローブ）
+- **品質基盤 ✅**（`9b26b3e`）`agent/policies/llm-policy.test.mjs`(node:test 21件) + GitHub Actions CI(`.github/workflows/ci.yml`、Node 構文/テスト・Python py_compile、実行成功)
+- **セキュリティ ✅**: CSP 設定・入力検証(port/bind)・JS 外部化。vendored bridge.lua 非改変（信頼境界=localhost単一ユーザー）。`docs/SECURITY.md`
+- 検証記録 `docs/env-verification.md` / 全体 INDEX `docs/INDEX.md`
+- **運用知見**: bridge.lua は ROM ロード後のみ有効（`emu` 未定義クラッシュ回避）。`qt.ini [recentScripts]` 事前登録 + `File > Load recent script` の AX クリックで自動ロード可（画面ロック中も可）
+
+## 機能サマリ（Agent が使える操作）
+- **GBA（mGBA + mcp-mgba, `bridge.lua` TCP:8765 localhost）**: `mgba_ping` / `mgba_get_info`(frame・title) / `mgba_screenshot`(240×160 PNG) / `mgba_press_buttons` / `mgba_read_range`・`read8/16/32` / `mgba_save_state`・`load_state` / `advance_frames` / `reset`
+- **GB/GBC（PyBoy + Python MCP, `mcp-server/pyboy/`）**: `pyboy_*` 10ツール（画面160×144 PNG/ndarray・8ボタン入力・メモリ read・save/load state）。GB(DMG)/GBC(CGB) 両対応・**GBA 非対応**
+- **ランチャー（Tauri v2, `launcher/`）**: 「ROM選択→Start」で mGBA+ROM+bridge 自動ロード+MCP疎通を一括起動。`.app`/`.dmg` 配布（`start-session.sh`/`stop-session.sh`）
+- **Agent ハーネス（`agent/`）**: `play-loop.mjs`(知覚→判断→行動) / `trial-and-error.mjs`(セーブステート分岐探索) / policies(`demo`=決定的 / `llm`=ローカル LLM ollama text/vision)。**判断関数の差し替えだけで LLM 自律プレイに拡張**（ハーネス無改造）
 
 ## ROM 方針
 自己所有カートリッジから吸い出した ROM のみ使用・**配布しない**（`.gitignore` で ROM/セーブ除外）。
