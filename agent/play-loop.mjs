@@ -11,14 +11,17 @@
 //
 //  前提: mGBA + bridge.lua(127.0.0.1:8765) 稼働（launcher/start-session.sh）。
 //  使い方: node agent/play-loop.mjs [steps]
+//    env: STATE_MAP=<path> 指定時は state-map(JSON) に従い HP/座標/フラグ を
+//         読み、observation.state に載せる（#12・未指定なら状態なし＝従来通り）。
 // =============================================================
-import { mkdtempSync, existsSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MgbaMcpClient, sleep } from './lib/mcp-client.mjs';
 import { demoPolicy, VALID_BUTTONS } from './policies/demo-policy.mjs';
 import { createLlmPolicy } from './policies/llm-policy.mjs';
 import { ollamaHasModel } from './lib/ollama-client.mjs';
+import { readState, parseStateMap } from './lib/state.mjs';
 
 const STEPS = parseInt(process.argv[2] || '6', 10);
 // 判断関数の選択:
@@ -30,6 +33,14 @@ const policy =
   POLICY === 'llm'
     ? createLlmPolicy({ vision: process.env.OLLAMA_VISION === '1' })
     : demoPolicy;
+
+// 実ゲーム状態読取 (#12): STATE_MAP 指定時のみ HP/座標/フラグ を observation.state に載せる。
+let stateMap = null;
+if (process.env.STATE_MAP) {
+  try { stateMap = parseStateMap(readFileSync(process.env.STATE_MAP, 'utf8')); }
+  catch (e) { console.warn(`⚠ state-map 読込失敗（${process.env.STATE_MAP}）: ${e.message}`); }
+}
+const stateEnabled = !!(stateMap && stateMap.descriptors.length);
 
 async function main() {
   const client = new MgbaMcpClient();
@@ -69,7 +80,13 @@ async function main() {
       savedShot = join(outDir, `step${String(step).padStart(2, '0')}.png`);
       copyFileSync(shot, savedShot);
     }
-    const observation = { step, frame: info.frame, title: info.title, screenshotPath: savedShot };
+    // 実ゲーム状態読取 (#12): state-map 指定時のみメモリを読む（未指定は null）。
+    let gameState = null;
+    if (stateEnabled) {
+      try { gameState = await readState(client, stateMap.descriptors); }
+      catch { gameState = null; }
+    }
+    const observation = { step, frame: info.frame, title: info.title, screenshotPath: savedShot, state: gameState };
 
     // 2. 判断（policy = デモ or ローカル LLM）
     const decision = await policy(observation);
@@ -85,7 +102,8 @@ async function main() {
     await sleep(120);
 
     console.log(
-      `step ${step}: frame=${info.frame} 知覚[${info.title}] ` +
+      `step ${step}: frame=${info.frame} 知覚[${info.title}` +
+      `${gameState ? ` | ${JSON.stringify(gameState)}` : ''}] ` +
       `→ 判断[${buttons.join('+') || '(なし)'}: ${note}] ` +
       `→ 行動✓ ${savedShot ? '📷' : ''}`
     );

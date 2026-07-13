@@ -1,0 +1,27 @@
+{
+  "game": "example — 一般化テンプレート（実アドレスはゲーム毎に別管理）",
+  "_note": "GBA の作業 RAM: EWRAM 0x02000000-0x0203FFFF / IWRAM 0x03000000-0x03007FFF。実アドレスは scripts/scan-memory.mjs のメモリ差分観測で特定し、agent/state-maps/<game>.local.json に保存する（.gitignore 済）。ここに並ぶアドレスはスキーマ説明用のプレースホルダ。",
+  "_schema": {
+    "descriptors": "読取フィールド。name/address 必須。size(1|2|4,既定1) signed endian(le|be) mask scale offset。bytes+encoding:'ascii' で文字列読取。",
+    "reward": "報酬仕様。field/mode(delta|increase|decrease|change|flag)/weight。前後状態の差分から報酬を算出。",
+    "signatureKeys": "進捗署名に使うキー（省略時は全フィールド）。画面ハッシュに加え状態変化でも進捗を検出。",
+    "completion": "完結条件。{field, equals} を stateEquals として評価（一致で完走）。"
+  },
+  "descriptors": [
+    { "name": "hp",         "address": "0x02000000", "size": 2, "endian": "le", "_desc": "現在HP（プレースホルダ・要特定）" },
+    { "name": "hp_max",     "address": "0x02000002", "size": 2, "endian": "le", "_desc": "最大HP" },
+    { "name": "x",          "address": "0x02000010", "size": 1, "_desc": "フィールドX座標" },
+    { "name": "y",          "address": "0x02000011", "size": 1, "_desc": "フィールドY座標" },
+    { "name": "gold",       "address": "0x02000020", "size": 4, "endian": "le", "_desc": "所持金" },
+    { "name": "event_flag", "address": "0x02000030", "size": 1, "mask": 1, "_desc": "イベント/クリアフラグの1bit" }
+  ],
+  "reward": [
+    { "field": "hp",         "mode": "delta",    "weight": 1,    "_desc": "HP 増減をそのまま報酬に（回復+/被ダメ-）" },
+    { "field": "gold",       "mode": "increase", "weight": 0.01, "_desc": "所持金の増加のみ小さく加点" },
+    { "field": "event_flag", "mode": "flag",     "weight": 10,   "_desc": "フラグ立ち上がりで大きく加点" }
+  ],
+  "signatureKeys": ["x", "y", "gold", "event_flag"],
+  "completion": [
+    { "field": "event_flag", "equals": 1, "_desc": "クリアフラグが立ったら完走とみなす（例）" }
+  ]
+}

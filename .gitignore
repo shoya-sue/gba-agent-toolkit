@@ -20,6 +20,11 @@ states/
 bios/
 # プレイスルーハーネスの実行記録（ログ・スクショ・スナップショット）
 runs/
+# ゲーム固有 state-map（実アドレス・ROM タイトルを含み得るため別管理）。
+# 一般化テンプレート example.json のみコミットする。
+agent/state-maps/*.local.json
+# メモリスキャンの中間スナップショット
+*.snapshot.json
 
 # --- OS ---
 .DS_Store

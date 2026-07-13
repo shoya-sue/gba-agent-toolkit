@@ -32,6 +32,10 @@
 //         FAIL_RECOVER_AFTER(既定2, 連続失敗が N でブリッジ再接続を試行) /
 //         RESTART_ROM(指定時のみ最終手段 restart-session を梯子に追加。ROM 絶対パス)
 //         リカバリ梯子: alt-input(別入力探索)→load-state(直近checkpoint復帰)→reset→restart-session
+//         [実ゲーム状態読取・報酬 #12]
+//         STATE_MAP=<path>  ゲーム固有の JSON(state-map: 記述子/報酬仕様/署名キー/完結)。
+//           指定時のみ HP/座標/フラグ を毎ステップ読み、observation.state / 進捗署名 /
+//           報酬シグナル / 完結条件に反映する。未指定なら状態読取は無効（後方互換）。
 //
 //  ※ 実 mGBA はリアルタイム動作でフレームは自然進行するため、既定では
 //    mgba_advance_frames を呼ばない（未応答ビルドで毎ステップ RPC タイムアウトし
@@ -46,9 +50,10 @@ import { createLlmPolicy } from './policies/llm-policy.mjs';
 import { ollamaHasModel } from './lib/ollama-client.mjs';
 import {
   createProgressTracker, evaluateCompletion, hashBytes,
-  observationSignature, parseCompletionConditions,
+  observationSignature, parseCompletionConditions, stateEquals,
 } from './lib/progress.mjs';
 import { createRecoveryController, explorationButtons } from './lib/recovery.mjs';
+import { readState, parseStateMap, stateSignature, computeReward } from './lib/state.mjs';
 import { spawnSync } from 'node:child_process';
 
 // ─────────── 純粋ヘルパー（外部依存なし・ユニットテスト対象） ───────────
@@ -97,6 +102,12 @@ export function buildSummary(s) {
     recoveries: s.recoveries ?? 0,
     recoveryByStrategy: s.recoveryByStrategy ?? {},
     recoveryGiveUp: s.recoveryGiveUp ?? false,
+    // 実ゲーム状態・報酬 (#12)
+    stateEnabled: s.stateEnabled ?? false,
+    stateFields: s.stateFields ?? [],
+    totalReward: s.totalReward ?? 0,
+    rewardSteps: s.rewardSteps ?? 0,
+    lastState: s.lastState ?? null,
   };
 }
 
@@ -143,6 +154,11 @@ async function finalize(client, state, runDir) {
   const recBy = Object.entries(state.recoveryByStrategy || {}).map(([k, v]) => `${k}:${v}`).join(' ');
   console.log(`リカバリ=${state.recoveries}${recBy ? ` (${recBy})` : ''}` +
     `${state.recoveryGiveUp ? ' ⛔give-up' : ''}`);
+  if (state.stateEnabled) {
+    console.log(`状態=[${(state.stateFields || []).join(', ')}] 報酬合計=${Math.round((state.totalReward || 0) * 100) / 100} ` +
+      `報酬発生=${state.rewardSteps}/${state.steps}` +
+      `${state.lastState ? ` 最終=${JSON.stringify(state.lastState)}` : ''}`);
+  }
   console.log(`  記録: ${runDir}`);
   try { client.close(); } catch { /* noop */ }
 }
@@ -158,7 +174,23 @@ async function main() {
   // 進捗・完走判定 (#15)
   const stuckAfter = Math.max(1, parseInt(process.env.STUCK_STEPS || '12', 10));
   const stuckAbort = Math.max(0, parseInt(process.env.STUCK_ABORT_STEPS || '0', 10));
-  const completionConditions = parseCompletionConditions(process.env);
+  // 実ゲーム状態読取 (#12): STATE_MAP=<path> の JSON(state-map) から
+  // 記述子(HP/座標/フラグ)と報酬仕様を読む。未指定なら状態読取は無効（後方互換）。
+  let stateMap = null;
+  const stateMapPath = process.env.STATE_MAP || '';
+  if (stateMapPath) {
+    try {
+      stateMap = parseStateMap(readFileSync(stateMapPath, 'utf8'));
+      console.log(`🗺 state-map: ${stateMapPath}（${stateMap.descriptors.length} フィールド, game=${stateMap.game ?? '?'}）`);
+    } catch (e) {
+      console.warn(`⚠ state-map 読込失敗（${stateMapPath}）: ${e.message} → 状態読取なしで継続`);
+    }
+  }
+  const stateEnabled = !!(stateMap && stateMap.descriptors.length);
+  // 完結条件 (#15) に state-map の completion（{field, equals}）を stateEquals として合流。
+  const completionConditions = parseCompletionConditions(process.env).concat(
+    (stateMap?.completion ?? []).map((c) => stateEquals(c.field, c.equals)),
+  );
   const tracker = createProgressTracker({ stuckAfter });
   // 自己修復・再トライ (#16)
   const recoverOn = process.env.RECOVER !== '0'; // 既定 ON。RECOVER=0 で無効化
@@ -200,6 +232,8 @@ async function main() {
     stuckAfter, stuckAbort, completionConditions: completionConditions.map((c) => c.name),
     recover: recoverOn, recoverEnabled, recoverMaxTotal, failRecoverAfter,
     restartSession: restartRom ? true : false,
+    stateMap: stateMapPath || null,
+    stateFields: stateEnabled ? stateMap.descriptors.map((d) => d.name) : [],
   };
   writeFileSync(join(runDir, 'meta.json'), JSON.stringify({ config, summary: null }, null, 2));
 
@@ -220,6 +254,9 @@ async function main() {
     completed: false, completionMatched: [],
     // 自己修復・再トライ (#16)
     recoveries: 0, recoveryByStrategy: {}, recoveryGiveUp: false,
+    // 実ゲーム状態・報酬 (#12)
+    stateEnabled, stateFields: stateEnabled ? stateMap.descriptors.map((d) => d.name) : [],
+    prevState: null, lastState: null, totalReward: 0, rewardSteps: 0,
   };
 
   // ── 自己修復 executor (#16): 純粋ロジック(recovery.mjs)が選んだ戦略を実際に適用する ──
@@ -321,10 +358,25 @@ async function main() {
         if (shot && existsSync(shot)) {
           try { screenHash = hashBytes(readFileSync(shot)); } catch { /* 読めなければ null */ }
         }
-        const gameState = null; // #12（状態アドレス読取）で HP/座標/フラグ を載せる予定
+        // 実ゲーム状態読取 (#12): state-map 指定時のみメモリを読む（未指定は null＝後方互換）。
+        let gameState = null;
+        let reward = null;
+        if (stateEnabled) {
+          try {
+            gameState = await withTimeout(readState(client, stateMap.descriptors), 3000);
+            reward = computeReward(state.prevState, gameState, stateMap.rewardSpec);
+            state.prevState = gameState;
+            state.lastState = gameState;
+            state.totalReward += reward.total;
+            if (reward.total !== 0) state.rewardSteps++;
+          } catch (e) {
+            gameState = null; // 状態読取の失敗は補助情報のため観測を壊さず継続
+            console.warn(`⚠ step ${step} 状態読取失敗: ${e?.message || e}`);
+          }
+        }
         prog = tracker.update(observationSignature({
           frame: info.frame, title: info.title, screenHash,
-          stateKey: gameState ? JSON.stringify(gameState) : null,
+          stateKey: stateSignature(gameState, stateMap?.signatureKeys),
         }));
         if (prog.progressed) { state.progressSteps++; recovery.onProgress(); } // 進捗再開で梯子リセット
         if (prog.noProgressStreak > state.maxNoProgressStreak) state.maxNoProgressStreak = prog.noProgressStreak;
@@ -393,6 +445,7 @@ async function main() {
           ok: true, frame: info.frame, title: info.title,
           buttons, note, snapshot: snap, savedShot: savedShot ? true : false,
           screenHash,
+          state: gameState, reward: reward ? reward.total : null,
           progressed: prog.progressed, progressReasons: prog.reasons,
           noProgressStreak: prog.noProgressStreak, stuck: prog.stuck, frameFrozen: prog.frameFrozen,
           completed: completion.completed, completionMatched: completion.matched,
