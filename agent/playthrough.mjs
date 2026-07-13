@@ -230,7 +230,9 @@ async function main() {
   }
   async function reconnectClient() {
     // mcp-mgba 子プロセスが死んだ場合の張り直し（mGBA/bridge が生存していれば復帰）。
-    try { client.close(); } catch { /* noop */ }
+    // close() は child.kill() のみで通常失敗しないが、失敗時は診断のため可視化する
+    // （旧子プロセス/接続のリーク兆候。次段の connect/bridgeAlive で実影響を確認）。
+    try { client.close(); } catch (e) { console.warn(`⚠ 旧 client close 失敗: ${e?.message || e}`); }
     client = new MgbaMcpClient();
     await client.connect();
     return bridgeAlive();
@@ -242,6 +244,9 @@ async function main() {
     try { spawnSync('bash', [join(dir, 'stop-session.sh')], { timeout: 30000 }); } catch { /* noop */ }
     const r = spawnSync('bash', [join(dir, 'start-session.sh'), '--rom', restartRom],
       { timeout: 120000, encoding: 'utf8' });
+    // timeout/signal kill 時は r.error/r.signal に出る（r.stdout は null になり得る）。
+    // これを見ないと「起動失敗」と「タイムアウトで殺した」が区別できず原因が曖昧になる。
+    if (r.error || r.signal) return { ok: false, detail: `start-session 異常終了: ${r.signal || r.error?.message}` };
     const started = /RESULT:\s*OK/.test((r.stdout || '') + (r.stderr || ''));
     if (started) { try { await reconnectClient(); } catch { /* 次段の bridgeAlive で検出 */ } }
     return { ok: started && (await bridgeAlive()), detail: started ? 'session restarted' : 'start-session 失敗' };
@@ -330,6 +335,7 @@ async function main() {
             `${prog.frozenStreak ? ` / frame 凍結 ${prog.frozenStreak}` : ''}`);
         }
         // 自己修復トリガ (#16): スタック中は stuckAfter ステップ毎に梯子を 1 段ずつ上って介入。
+        // （STUCK_STEPS=1 だと詰まり中は毎ステップ発動しうるが、総試行 RECOVER_MAX_TOTAL で頭打ち）
         const shouldRecover = recoverOn && prog.stuck && (prog.noProgressStreak - stuckAfter) % stuckAfter === 0;
 
         // 2. 判断
@@ -402,8 +408,10 @@ async function main() {
         state.consecutiveFailures++;
         Object.assign(entry, { ok: false, error: String(e?.message || e), durMs: Date.now() - t0 });
         console.warn(`⚠ step ${step} 失敗(${state.consecutiveFailures}/${maxFailures}): ${entry.error}`);
-        // 切断/クラッシュからの自己修復 (#16): 応答が無ければ mcp-mgba 再接続、
-        //   ダメなら（ROM 指定時のみ）セッション再起動を試みる。maxFailures 到達前に復帰を狙う。
+        // 切断/クラッシュからの自己修復 (#16): 詰まり梯子(recovery コントローラ)とは**別系統**。
+        //   観測不変(詰まり)と RPC 失敗(切断)は別現象なので梯子を共有しない（意図的な分離）。
+        //   応答が無ければ mcp-mgba 再接続、ダメなら（ROM 指定時のみ）セッション再起動。
+        //   maxFailures 到達前に復帰を狙い、復帰できたら consecutiveFailures をリセットする。
         if (recoverOn && state.consecutiveFailures >= failRecoverAfter && state.consecutiveFailures < maxFailures) {
           const alive = await bridgeAlive();
           if (!alive) {
