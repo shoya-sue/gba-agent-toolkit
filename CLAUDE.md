@@ -28,6 +28,7 @@ docs/           # ロードマップ・手順書・検証記録
 初期ロードマップ（Phase 0〜4 ＋ #8/#9/#10 ＋ 品質基盤）は**全て完了**。次段階として **Epic #13「自律プレイスルー完走テスト」** に着手済み（土台 #14・進捗/完走判定 #15・self-healing #16 完了、残り #17 のみ）。
 - **OPEN issue（3件）**: Epic #13 + sub #17(E2E完走・合否レポート＝総仕上げ)、判断強化 #11（状態アドレス読取 #12 は完了✅）
 - **#12 ✅**（`7889b3e`）実ゲーム状態アドレス読取・報酬設計。`agent/lib/state.mjs`（純粋ロジック＋`readState`、unit 46件）＋ `scripts/scan-memory.mjs`（メモリ差分でアドレス特定）。ゲーム固有 RAM マップは JSON state-map で外出し（`agent/state-maps/example.json`=テンプレ、実マップは `<game>.local.json`=非コミット）。`playthrough.mjs`/`play-loop.mjs` は `STATE_MAP` 指定時のみ状態を読み `observation.state`/進捗署名/報酬/完結へ反映（後方互換）。実 ROM ライブで read フォーマット確定→パーサ2件修正、メニュー選択インデックス特定・observation.state/報酬/進捗/完結の反応を実証。unit 112/112。仕様 `docs/state-reading.md`
+- **#17（実装済・実ROM完走は未実証）** E2E 完走テスト統合ランナー `scripts/verify-playthrough.sh <ROM> <scenario>`（mGBA起動→`verify-playthrough.mjs`→playthrough(#14/#15/#16/#12)→停止）＋合否レポート `agent/lib/report.mjs`（純粋ロジック・unit 11件）→ `runs/<id>/report.{json,md}`（PASS=完結到達のみ・停止理由・到達点/マイルストーン・リカバリ回数・所要・スクショ/ログ）。完走シナリオは `agent/scenarios/example.json`=テンプレ、実シナリオ `<game>.local.json`=非コミット。CI 対象外（実機のみ）。手順 `docs/playthrough-e2e.md`
 - **Phase 0〜4 ✅**（#2〜#6, close）: 環境検証 / GBA コア API(`verify-phase1.mjs` 10/10) / Tauri ランチャー / MCP・Agent 連携 / GB・GBC(PyBoy `test_pyboy_api.py` 12/12)
 - **#8 ✅**（`517328d`）ローカル LLM(ollama) ポリシー実接続（`agent/policies/llm-policy.mjs`、text/vision、`POLICY=llm` 切替。監査後ハードニング済）
 - **#9 ✅**（`baf0e8d`）`tauri build` で `.app`/`.dmg` バンドル。**空白パスで Lua `require("json")` 破綻→空白なしパス（`~/.config/gba-agent-toolkit/mgba-bridge/`）へ stage** する対策
