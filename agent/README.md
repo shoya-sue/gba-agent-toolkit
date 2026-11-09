@@ -14,6 +14,9 @@ agent/
 ├── lib/progress.test.mjs     # progress 純粋関数のユニットテスト（node:test, 21件）
 ├── lib/recovery.mjs          # 自己修復エスカレーション論理（#16）
 ├── lib/recovery.test.mjs     # recovery 純粋関数のユニットテスト（node:test, 13件）
+├── lib/report.mjs            # E2E 完走シナリオ + 合否レポートの純粋ロジック（#17）
+├── lib/report.test.mjs       # report 純粋関数のユニットテスト（node:test, 11件）
+├── scenarios/example.json    # 完走シナリオのテンプレート（実ゲームは <game>.local.json・非コミット, #17）
 ├── policies/demo-policy.mjs      # 「判断」の決定的デモ
 ├── policies/llm-policy.mjs       # 「判断」のローカル LLM 実接続（★自律プレイ）
 ├── policies/llm-policy.test.mjs  # llm-policy 純粋関数のユニットテスト（node:test, 21件）
@@ -53,6 +56,10 @@ node --test policies/llm-policy.test.mjs              # llm-policy 正規化/JSO
 node --test playthrough.test.mjs                     # playthrough ループ制御/サマリ 11件
 node --test lib/progress.test.mjs                    # 進捗・完走判定 21件（#15）
 node --test lib/recovery.test.mjs                    # 自己修復エスカレーション 13件（#16）
+node --test lib/report.test.mjs                      # E2E 合否レポート 11件（#17）
+
+# E2E 完走テスト + 合否レポート（#17・リポジトリ直下で実行。手順: ../docs/playthrough-e2e.md）
+# ../scripts/verify-playthrough.sh roms/mygame.gba agent/scenarios/mygame.local.json
 ```
 
 ## ローカル LLM 自律プレイ（Issue #8）

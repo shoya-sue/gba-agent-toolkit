@@ -1,0 +1,39 @@
+{
+  "game": "example — 完走シナリオの一般化テンプレート（実ゲームは <game>.local.json に別管理）",
+  "_note": "scripts/verify-playthrough.sh <ROM> <scenario> で使用。ゲーム固有の値（title 文字列・画面ハッシュ・state-map パス）は agent/scenarios/<game>.local.json に置く（.gitignore 済）。ここに並ぶ値はスキーマ説明用のプレースホルダ。",
+  "_schema": {
+    "flow": "開始〜完結の想定フロー（レポート・ログ表示用の説明。判定には使わない）",
+    "milestones": "到達点の判定に使う中間地点（定義順）。name と titleContains | state{field,equals} | screenHashes[] のいずれか。steps.jsonl を走査し最遠到達をレポートの『到達点』に出す",
+    "completion": "完結条件（いずれか一致で PASS）。titleContains / state='field=value'(#12 state-map 必須) / screenHashes[]（エンディング画面の PNG ハッシュ = steps.jsonl の screenHash）",
+    "stateMap": "状態読取 state-map のパス（#12。任意）。その completion も完結条件に合流",
+    "run": "playthrough.mjs の実行設定。maxSteps / maxSeconds / policy(demo|llm) / env（STUCK_STEPS 等の追加 env）。コマンドラインの env が優先"
+  },
+  "flow": [
+    "起動（タイトル画面）",
+    "New Game → 名前入力",
+    "序盤マップ → 最初のイベント",
+    "…（中盤）",
+    "ラスボス撃破 → エンディング（完結）"
+  ],
+  "milestones": [
+    { "name": "title-screen", "titleContains": "EXAMPLE" },
+    { "name": "first-event",  "state": { "field": "event_flag", "equals": 1 } },
+    { "name": "ending",       "screenHashes": ["00000000"] }
+  ],
+  "completion": {
+    "titleContains": null,
+    "state": "event_flag=1",
+    "screenHashes": []
+  },
+  "stateMap": "agent/state-maps/example.json",
+  "run": {
+    "maxSteps": 20000,
+    "maxSeconds": 14400,
+    "policy": "llm",
+    "env": {
+      "STUCK_STEPS": "20",
+      "SNAPSHOT_EVERY": "50",
+      "RECOVER_MAX_TOTAL": "30"
+    }
+  }
+}

@@ -23,6 +23,8 @@ runs/
 # ゲーム固有 state-map（実アドレス・ROM タイトルを含み得るため別管理）。
 # 一般化テンプレート example.json のみコミットする。
 agent/state-maps/*.local.json
+# ゲーム固有の完走シナリオ（同上）。テンプレート agent/scenarios/example.json のみコミット。
+agent/scenarios/*.local.json
 # メモリスキャンの中間スナップショット
 *.snapshot.json
 

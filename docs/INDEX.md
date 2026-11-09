@@ -16,6 +16,7 @@ GBA/GB/GBC を **AI Agent が MCP 経由で自律操作**するツールキッ�
 | [phase2-launcher.md](phase2-launcher.md) | Tauri ランチャー設計・検証 |
 | [agent-integration.md](agent-integration.md) | MCP/Agent 連携・接続手順 |
 | [state-reading.md](state-reading.md) | 実ゲーム状態アドレス読取・報酬設計（#12） |
+| [playthrough-e2e.md](playthrough-e2e.md) | 自律プレイスルー E2E 完走テスト・合否レポート（#17） |
 | [SECURITY.md](SECURITY.md) | スレットモデル・セキュリティ方針 |
 | **INDEX.md**（本書） | 全体 INDEX |
 
