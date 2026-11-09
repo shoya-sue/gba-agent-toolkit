@@ -27,6 +27,7 @@ docs/           # ロードマップ・手順書・検証記録
 ## 現状 (2026-07-13) — 初期ロードマップ完遂 → 自律完走テスト着手
 初期ロードマップ（Phase 0〜4 ＋ #8/#9/#10 ＋ 品質基盤）は**全て完了**。次段階として **Epic #13「自律プレイスルー完走テスト」** に着手済み（土台 #14・進捗/完走判定 #15・self-healing #16 完了、残り #17 のみ）。
 - **OPEN issue（3件）**: Epic #13 + sub #17(E2E完走・合否レポート＝総仕上げ)、判断強化 #11（状態アドレス読取 #12 は完了✅）
+- **#11（実装済・実 ROM 評価待ち）** LLM 判断強化。`agent/lib/prompt.mjs`（状態要約/行動候補/直近行動と効果/空振り警告/先読み plan、llm・claude 共通）＋ `agent/policies/claude-policy.mjs`（`POLICY=claude`・Claude API vision・`@anthropic-ai/sdk` は `agent/` で npm install・遅延 import）＋ `agent/policies/select.mjs`（POLICY 選択を play-loop/playthrough で共通化）＋ `agent/eval-policies.mjs`（同一セーブステートから複数ポリシーを走らせ画面数/進捗/無進捗/reward で比較）。手順 `docs/agent-integration.md`。残: 実 ROM での比較評価結果の記録
 - **#12 ✅**（`7889b3e`）実ゲーム状態アドレス読取・報酬設計。`agent/lib/state.mjs`（純粋ロジック＋`readState`、unit 46件）＋ `scripts/scan-memory.mjs`（メモリ差分でアドレス特定）。ゲーム固有 RAM マップは JSON state-map で外出し（`agent/state-maps/example.json`=テンプレ、実マップは `<game>.local.json`=非コミット）。`playthrough.mjs`/`play-loop.mjs` は `STATE_MAP` 指定時のみ状態を読み `observation.state`/進捗署名/報酬/完結へ反映（後方互換）。実 ROM ライブで read フォーマット確定→パーサ2件修正、メニュー選択インデックス特定・observation.state/報酬/進捗/完結の反応を実証。unit 112/112。仕様 `docs/state-reading.md`
 - **Phase 0〜4 ✅**（#2〜#6, close）: 環境検証 / GBA コア API(`verify-phase1.mjs` 10/10) / Tauri ランチャー / MCP・Agent 連携 / GB・GBC(PyBoy `test_pyboy_api.py` 12/12)
 - **#8 ✅**（`517328d`）ローカル LLM(ollama) ポリシー実接続（`agent/policies/llm-policy.mjs`、text/vision、`POLICY=llm` 切替。監査後ハードニング済）
