@@ -124,3 +124,41 @@ test('normalizeButtons: 実際の LLM 出力シミュレーション', () => {
   const result = normalizeButtons(['a', 'up', 'left']);
   assert.deepStrictEqual(result, ['A', 'Up', 'Left']);
 });
+
+// ─── #11: 判断の解析（plan/scene）・note 整形・環境設定 ───
+import { parseDecision, decisionNote, promptOptionsFromEnv, observationKey } from './llm-policy.mjs';
+
+test('parseDecision: buttons/plan/scene を正規化', () => {
+  const d = parseDecision({ buttons: ['down'], plan: ['Down', 'a', 'x', 'A'], scene: 'menu', reason: 'pick' });
+  assert.deepEqual(d.buttons, ['Down']);
+  assert.deepEqual(d.plan, ['Down', 'A', 'A']);
+  assert.equal(d.scene, 'menu');
+  assert.equal(d.valid, true);
+  assert.equal(d.noop, false);
+});
+
+test('parseDecision: 空配列は明示的 noop・buttons 不在は invalid', () => {
+  assert.deepEqual([parseDecision({ buttons: [] }).valid, parseDecision({ buttons: [] }).noop], [true, true]);
+  assert.equal(parseDecision({ reason: 'x' }).valid, false);
+  assert.equal(parseDecision(null).valid, false);
+});
+
+test('decisionNote: scene と plan を付記', () => {
+  const d = parseDecision({ buttons: ['A'], plan: ['A', 'Down'], scene: 'title', reason: 'start' });
+  assert.equal(decisionNote('LLM(m)', d), 'LLM(m): start [scene=title plan=A>Down]');
+  assert.equal(decisionNote('LLM(m)', parseDecision({ buttons: [], reason: 'wait' })), 'LLM(m): no action (wait)');
+});
+
+test('promptOptionsFromEnv: 既定 3・範囲外/不正値を丸める', () => {
+  assert.deepEqual(promptOptionsFromEnv({}), { lookahead: 3, goal: '' });
+  assert.equal(promptOptionsFromEnv({ AGENT_LOOKAHEAD: '0' }).lookahead, 0);
+  assert.equal(promptOptionsFromEnv({ AGENT_LOOKAHEAD: '99' }).lookahead, 8);
+  assert.equal(promptOptionsFromEnv({ AGENT_LOOKAHEAD: 'x' }).lookahead, 3);
+  assert.equal(promptOptionsFromEnv({ AGENT_GOAL: 'win' }).goal, 'win');
+});
+
+test('observationKey: screenHash 優先・読めない画像は null', () => {
+  assert.equal(observationKey({ screenHash: 'abc' }).screenHash, 'abc');
+  assert.equal(observationKey({ screenshotPath: '/nonexistent/x.png' }).screenHash, null);
+  assert.equal(observationKey({}).stateKey, null);
+});

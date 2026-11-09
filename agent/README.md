@@ -16,7 +16,15 @@ agent/
 ├── lib/recovery.test.mjs     # recovery 純粋関数のユニットテスト（node:test, 13件）
 ├── policies/demo-policy.mjs      # 「判断」の決定的デモ
 ├── policies/llm-policy.mjs       # 「判断」のローカル LLM 実接続（★自律プレイ）
-├── policies/llm-policy.test.mjs  # llm-policy 純粋関数のユニットテスト（node:test, 21件）
+├── policies/llm-policy.test.mjs  # llm-policy 純粋関数のユニットテスト（node:test, 26件）
+├── policies/claude-policy.mjs    # 「判断」の Claude API(vision) 接続（#11, 要 npm install）
+├── policies/claude-policy.test.mjs # claude-policy のユニットテスト（偽クライアント, 10件）
+├── policies/select.mjs           # POLICY=demo|llm|claude の選択（play-loop/playthrough 共通）
+├── lib/prompt.mjs                # 判断プロンプト・観測整形（状態要約/行動候補/履歴/先読み, #11）
+├── lib/prompt.test.mjs           # prompt のユニットテスト（11件）
+├── eval-policies.mjs             # 判断ポリシーの同一シーン比較評価（#11）
+├── eval-policies.test.mjs        # eval-policies 純粋ヘルパーのユニットテスト（6件）
+├── package.json                  # @anthropic-ai/sdk（POLICY=claude 利用時のみ `npm install`）
 ├── play-loop.mjs                 # 知覚→判断→行動 ループ PoC（POLICY で切替）
 ├── playthrough.mjs               # プレイスルー・テストハーネス基盤（長時間ループ・記録・再開・進捗/完走判定・自己修復, #14/#15/#16）
 ├── playthrough.test.mjs          # playthrough 純粋ヘルパーのユニットテスト（node:test, 11件）
@@ -30,6 +38,8 @@ node play-loop.mjs 6                                   # 決定的デモで 6 �
 POLICY=llm OLLAMA_MODEL=qwen2.5:7b node play-loop.mjs 20   # ローカル LLM(text) 自律 20 ステップ
 POLICY=llm OLLAMA_MODEL=moondream OLLAMA_VISION=1 node play-loop.mjs 20  # vision LLM(画面添付)
 node trial-and-error.mjs                              # save→分岐A→load→分岐B の試行錯誤
+npm install && POLICY=claude node play-loop.mjs 20     # Claude API(vision) 判断（#11・要 ANTHROPIC_API_KEY）
+EVAL_POLICIES="llm@qwen2.5:7b,llm@moondream+vision,claude" node eval-policies.mjs 20  # 同一シーン比較（#11）
 
 # プレイスルー・テストハーネス（長時間自律プレイ・記録/再開・進捗/完走判定, #14/#15）
 SNAPSHOT_EVERY=25 node playthrough.mjs 500             # 最大500ステップ, 25毎にスクショ+checkpoint
@@ -49,7 +59,10 @@ COMPLETE_TITLE_CONTAINS="THE END" STUCK_STEPS=20 node playthrough.mjs 2000
 #        詰まり(stuck)と切断/クラッシュの両方で自動発動。総上限で give-up（無限ループ防止）
 
 # ユニットテスト（mGBA/ollama 不要・純粋関数のみ）
-node --test policies/llm-policy.test.mjs              # llm-policy 正規化/JSON抽出 21件
+node --test policies/llm-policy.test.mjs              # llm-policy 正規化/JSON抽出/判断解析 26件
+node --test policies/claude-policy.test.mjs           # claude-policy（偽クライアント・SDK/キー不要）10件（#11）
+node --test lib/prompt.test.mjs                       # 判断プロンプト・履歴 11件（#11）
+node --test eval-policies.test.mjs                    # 比較評価の集計/順位 6件（#11）
 node --test playthrough.test.mjs                     # playthrough ループ制御/サマリ 11件
 node --test lib/progress.test.mjs                    # 進捗・完走判定 21件（#15）
 node --test lib/recovery.test.mjs                    # 自己修復エスカレーション 13件（#16）
@@ -61,6 +74,12 @@ node --test lib/recovery.test.mjs                    # 自己修復エスカレ�
 - `POLICY=llm` で有効化。`OLLAMA_MODEL` でモデル、`OLLAMA_VISION=1` で画面 PNG 添付（vision モデル）。
 - 別バックエンドも `(observation)=>{buttons,note}` を実装して `play-loop.mjs` の `policy` に渡すだけ（ハーネス無改造）。
 - 手順詳細: [../docs/agent-integration.md](../docs/agent-integration.md)
+
+## 判断の強化（Issue #11）
+- **プロンプト改善**（`lib/prompt.mjs`・llm/claude 共通）: 状態要約(#12) / 行動候補の意味 / 直近行動とその効果（画面が変わったか）/ 空振り警告 / 数ステップ先読み plan。`AGENT_LOOKAHEAD`(既定3, 0で無効) / `AGENT_GOAL`
+- **Claude 接続**（`POLICY=claude`）: 画面 PNG を Claude に渡して判断。`CLAUDE_MODEL`(既定 `claude-opus-5-5`) / `CLAUDE_VISION`(既定1) / `CLAUDE_EFFORT`(既定 medium) / `CLAUDE_FALLBACKS`(既定1)
+- **比較評価**（`eval-policies.mjs`）: 同一セーブステートから各ポリシーを走らせ、画面数/進捗/無進捗/reward で比較
+- 手順詳細: [../docs/agent-integration.md](../docs/agent-integration.md)（「判断の強化（Issue #11）」節）
 
 ## 検証（2026-07-10・実機）
 - `play-loop.mjs`(demo): 6 ステップ全てで 知覚→判断→行動 成立（frame 11009→14070）

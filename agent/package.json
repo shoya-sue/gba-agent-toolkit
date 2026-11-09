@@ -1,0 +1,8 @@
+{
+  "name": "gba-agent-toolkit-agent",
+  "private": true,
+  "description": "AI Agent harness (play-loop / playthrough / policies). Claude ポリシー (POLICY=claude) 利用時のみ npm install が必要",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0"
+  }
+}

@@ -23,6 +23,7 @@
 | **Tauri capability 最小化** | `capabilities/default.json` は `core:default` のみ。カスタムコマンド（`pick_rom`/`start_session`/`stop_session`/`load_config`/`save_config`）は `invoke_handler` 登録の 5 個に限定。ローカルフロントのみが呼び出す（外部 web コンテンツはロードしない） |
 | **コマンド実行の安全性** | Rust は `Command::arg()` で引数を分離渡し（シェル展開を経由しない）。シェルは変数をダブルクォートで囲む |
 | **秘密情報** | ハードコードされた鍵・トークンなし。ROM/セーブ/BIOS は `.gitignore` で除外 |
+| **外部 LLM API（`POLICY=claude`, #11）** | opt-in 時のみ Anthropic API へ**画面 PNG と状態テキスト**を送信（ROM/セーブは送らない）。認証は SDK 既定（`ANTHROPIC_API_KEY` 等の環境変数/プロファイル）で、キーをコード・ログ・`runs/` に出さない。外部送信を避ける場合は `POLICY=llm`（ローカル完結） |
 
 ## 意図的に「制限しない」設計（レビュー指摘への回答）
 

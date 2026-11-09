@@ -18,9 +18,8 @@ import { mkdtempSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MgbaMcpClient, sleep } from './lib/mcp-client.mjs';
-import { demoPolicy, VALID_BUTTONS } from './policies/demo-policy.mjs';
-import { createLlmPolicy } from './policies/llm-policy.mjs';
-import { ollamaHasModel } from './lib/ollama-client.mjs';
+import { VALID_BUTTONS } from './policies/demo-policy.mjs';
+import { selectPolicy } from './policies/select.mjs';
 import { readState, parseStateMap } from './lib/state.mjs';
 
 const STEPS = parseInt(process.argv[2] || '6', 10);
@@ -28,11 +27,8 @@ const STEPS = parseInt(process.argv[2] || '6', 10);
 //   POLICY=demo（既定）… 決定的デモ
 //   POLICY=llm         … ローカル LLM(ollama)。OLLAMA_MODEL でモデル指定、
 //                        OLLAMA_VISION=1 で画面 PNG を添付（vision モデル向け）
-const POLICY = process.env.POLICY || 'demo';
-const policy =
-  POLICY === 'llm'
-    ? createLlmPolicy({ vision: process.env.OLLAMA_VISION === '1' })
-    : demoPolicy;
+//   POLICY=claude      … Claude API（画面 PNG 添付が既定）。CLAUDE_MODEL / CLAUDE_EFFORT (#11)
+const { policy, label: policyLabel, preflight } = selectPolicy();
 
 // 実ゲーム状態読取 (#12): STATE_MAP 指定時のみ HP/座標/フラグ を observation.state に載せる。
 let stateMap = null;
@@ -52,22 +48,14 @@ async function main() {
     client.close();
     process.exit(2);
   }
-  // POLICY=llm のときは ollama とモデルの存在を先に確認（毎ステップ失敗の空振り回避）
-  if (POLICY === 'llm') {
-    const mdl = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
-    if (!(await ollamaHasModel(mdl))) {
-      console.error(
-        `✗ ollama にモデル "${mdl}" が見つかりません（${process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}）。\n` +
-        `  ollama 起動と \`ollama pull ${mdl}\` を確認してください。`
-      );
-      client.close();
-      process.exit(2);
-    }
+  // POLICY=llm/claude のときは判断バックエンドの疎通を先に確認（毎ステップ失敗の空振り回避）
+  const pre = await preflight();
+  if (!pre.ok) {
+    console.error(`✗ ${pre.error}`);
+    client.close();
+    process.exit(2);
   }
   const outDir = mkdtempSync(join(tmpdir(), 'gba-agent-loop-'));
-  const policyLabel = POLICY === 'llm'
-    ? `LLM(ollama ${process.env.OLLAMA_MODEL || 'qwen2.5:7b'}${process.env.OLLAMA_VISION === '1' ? ', vision' : ''})`
-    : 'demo';
   console.log(`▶ 知覚→判断→行動 ループ開始（${STEPS} ステップ, policy=${policyLabel}）`);
   console.log(`  スクリーンショット保存先: ${outDir}\n`);
 
