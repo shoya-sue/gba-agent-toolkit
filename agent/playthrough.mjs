@@ -16,7 +16,8 @@
 //
 //  前提: mGBA + bridge.lua(127.0.0.1:8765) 稼働（launcher/start-session.sh）。
 //  使い方: node agent/playthrough.mjs [maxSteps]
-//    env: POLICY=demo|llm / OLLAMA_MODEL / OLLAMA_VISION=1 / OLLAMA_HOST
+//    env: POLICY=demo|llm|claude / OLLAMA_MODEL / OLLAMA_VISION=1 / OLLAMA_HOST
+//         CLAUDE_MODEL / CLAUDE_VISION / CLAUDE_EFFORT / AGENT_LOOKAHEAD / AGENT_GOAL (#11)
 //         MAX_SECONDS(既定600) / SNAPSHOT_EVERY(既定25) / CHECKPOINT_SLOT(既定1)
 //         MAX_FAILURES(既定5) / RUN_DIR(出力先上書き) / RESUME=1
 //         STEP_DELAY_MS(既定250, ステップ間の実時間ディレイ=リアルタイム進行量)
@@ -45,9 +46,8 @@
 import { existsSync, copyFileSync, mkdirSync, appendFileSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MgbaMcpClient, sleep } from './lib/mcp-client.mjs';
-import { demoPolicy, VALID_BUTTONS } from './policies/demo-policy.mjs';
-import { createLlmPolicy } from './policies/llm-policy.mjs';
-import { ollamaHasModel } from './lib/ollama-client.mjs';
+import { VALID_BUTTONS } from './policies/demo-policy.mjs';
+import { selectPolicy } from './policies/select.mjs';
 import {
   createProgressTracker, evaluateCompletion, hashBytes,
   observationSignature, parseCompletionConditions, stateEquals,
@@ -119,17 +119,6 @@ function withTimeout(promise, ms) {
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout ${ms}ms`)), ms)),
   ]);
-}
-
-function selectPolicy() {
-  const kind = process.env.POLICY || 'demo';
-  const policy = kind === 'llm'
-    ? createLlmPolicy({ vision: process.env.OLLAMA_VISION === '1' })
-    : demoPolicy;
-  const label = kind === 'llm'
-    ? `LLM(ollama ${process.env.OLLAMA_MODEL || 'qwen2.5:7b'}${process.env.OLLAMA_VISION === '1' ? ', vision' : ''})`
-    : 'demo';
-  return { kind, policy, label };
 }
 
 async function finalize(client, state, runDir) {
@@ -209,14 +198,12 @@ async function main() {
     process.exit(2);
   }
 
-  const { kind, policy, label } = selectPolicy();
-  if (kind === 'llm') {
-    const mdl = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
-    if (!(await ollamaHasModel(mdl))) {
-      console.error(`✗ ollama にモデル "${mdl}" が見つかりません（${process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}）。`);
-      client.close();
-      process.exit(2);
-    }
+  const { policy, label, preflight } = selectPolicy();
+  const pre = await preflight(); // llm/claude は判断バックエンドの疎通を先に確認
+  if (!pre.ok) {
+    console.error(`✗ ${pre.error}`);
+    client.close();
+    process.exit(2);
   }
 
   // 出力ディレクトリ（runs/<runId>/ 既定・.gitignore 済）
